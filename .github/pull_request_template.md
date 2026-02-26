@@ -10,10 +10,6 @@
 - [ ] Chore / dependency update
 - [ ] Documentation
 
-## Related issue
-
-Closes #<!-- issue number -->
-
 ## Testing
 
 <!-- How did you verify this works? Check all that apply. -->
