@@ -1,50 +1,72 @@
-# Welcome to your Expo app 👋
+# kronnus-app
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+React Native + Expo frontend for Kronnus — a distributed mobile timing system.
+Companion backend: [`../kronnus-api`](../kronnus-api) (Go + Fiber).
 
-## Get started
+---
 
-1. Install dependencies
+## Prerequisites
 
-   ```bash
-   npm install
-   ```
+| Tool                           | Purpose                                    |
+| ------------------------------ | ------------------------------------------ |
+| Node.js >= 18                  | JavaScript runtime                         |
+| npm                            | Package manager                            |
+| [Expo Go](https://expo.dev/go) | Run the app on your phone (iOS or Android) |
+| Go >= 1.21                     | Required to run the backend                |
+| Docker                         | Required to run the PostgreSQL database    |
 
-2. Start the app
+> Both `kronnus-app` and `kronnus-api` must live in the **same parent folder**.
 
-   ```bash
-   npx expo start
-   ```
+---
 
-In the output, you'll find options to open the app in a
+## Running locally
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+### 1. Start the backend
 
 ```bash
-npm run reset-project
+# from ../kronnus-api
+cp .env.example .env   # first time only
+make run
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+The API will be available at `http://localhost:8080`.
 
-## Learn more
+### 2. Start the mobile app
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+# from this directory (kronnus-app)
+npm install            # first time only
+cp .env.example .env.local   # first time only — set EXPO_PUBLIC_API_URL
+make start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+A QR code will appear in the terminal. Scan it with **Expo Go** on your phone.
 
-## Join the community
+> **Physical device:** your phone and computer must be on the same Wi-Fi network.
+> Set `EXPO_PUBLIC_API_URL=http://<your-machine-lan-ip>:8080` in `.env.local`.
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Shortcut: start everything at once
+
+From `../kronnus-api`, after the database is already up:
+
+```bash
+make dev
+```
+
+This starts both the API and the Expo dev server in parallel. Press `Ctrl-C` to stop both.
+
+---
+
+## Common Makefile targets
+
+| Command        | Description                                                     |
+| -------------- | --------------------------------------------------------------- |
+| `make start`   | Start Expo dev server (LAN)                                     |
+| `make tunnel`  | Start with tunnel — useful when phone is on a different network |
+| `make android` | Open on Android emulator                                        |
+| `make ios`     | Open on iOS simulator                                           |
+| `make lint`    | Run ESLint                                                      |
+| `make check`   | Run lint + TypeScript type check                                |
+| `make reset`   | Wipe `node_modules` and reinstall                               |

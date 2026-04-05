@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__paper__get_basic_info",
+      "mcp__paper__get_screenshot",
+      "mcp__paper__get_jsx",
+      "Bash(npx expo:*)",
+      "Bash(go build:*)",
+      "Bash(export GOPATH=\"$HOME/go\")",
+      "Bash(export PATH=\"$PATH:$GOPATH/bin\")"
+    ]
+  }
+}
