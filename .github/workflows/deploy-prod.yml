@@ -1,0 +1,51 @@
+name: Deploy — Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+
+jobs:
+  build-and-distribute:
+    name: EAS Production Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx expo lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build production binary
+        run: >
+          eas build
+          --profile production
+          --platform ${{ github.event.inputs.platform }}
+          --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}
