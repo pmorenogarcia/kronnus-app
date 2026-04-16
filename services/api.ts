@@ -1,6 +1,6 @@
 import { LoginRequest, LoginResponse } from '@/types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080';
 
 export async function callHello(): Promise<string> {
   const response = await fetch(`${API_BASE_URL}/hello`);
