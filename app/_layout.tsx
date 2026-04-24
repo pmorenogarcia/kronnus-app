@@ -27,7 +27,7 @@ function RootNavigator() {
     if (!isAuthenticated && inTabsGroup) {
       router.replace('/login');
     } else if (isAuthenticated && !inTabsGroup) {
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, firstSegment]);
 

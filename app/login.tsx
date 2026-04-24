@@ -51,7 +51,7 @@ export default function LoginScreen() {
     try {
       const { token } = await loginUser(identifier.trim(), password);
       signIn(token);
-      router.replace('/(tabs)/');
+      router.replace('/(tabs)');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
