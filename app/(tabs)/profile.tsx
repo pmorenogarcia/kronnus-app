@@ -1,22 +1,40 @@
 import { Feather } from '@expo/vector-icons';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
+import { getMe } from '@/src/api';
+import { User } from '@/types';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { token, signOut } = useAuth();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    getMe(token)
+      .then(setUser)
+      .catch(() => {});
+  }, [token]);
+
+  const initials = user?.email ? user.email[0].toUpperCase() : '?';
+  const displayName = user?.email ? user.email.split('@')[0].toUpperCase() : '';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{user?.initials ?? '??'}</Text>
+        <Text style={styles.avatarText}>{initials}</Text>
       </View>
-      <Text style={styles.name}>{user?.name?.toUpperCase() ?? 'USER'}</Text>
+      <Text style={styles.name}>{displayName}</Text>
       <Text style={styles.email}>{user?.email ?? ''}</Text>
 
-      <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.signOutBtn}
+        onPress={() => void signOut()}
+        activeOpacity={0.8}
+      >
         <Feather name="log-out" size={16} color="#1C1C1C" />
         <Text style={styles.signOutText}>SIGN OUT</Text>
       </TouchableOpacity>

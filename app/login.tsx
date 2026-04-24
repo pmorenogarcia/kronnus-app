@@ -4,7 +4,6 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -17,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { login } from '@/services';
+import { loginUser } from '@/src/api';
 
 const C = {
   bg: '#1C1C1C',
@@ -36,28 +35,25 @@ export default function LoginScreen() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [identifierFocused, setIdentifierFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignIn() {
     if (!identifier.trim() || !password.trim()) {
-      Alert.alert('Missing credentials', 'Please enter your email/username and password.');
+      setError('Please enter your email/username and password.');
       return;
     }
 
+    setError(null);
     setLoading(true);
     try {
-      const result = await login({ identifier: identifier.trim(), password });
-      signIn(result.token, result.user);
+      const { token } = await loginUser(identifier.trim(), password);
+      signIn(token);
       router.replace('/(tabs)/');
     } catch (err) {
-      const is4xx = err instanceof Error && /40[01]/.test(err.message);
-      Alert.alert(
-        'Sign In Failed',
-        is4xx
-          ? 'Invalid email/username or password.'
-          : 'Could not connect to the server. Make sure the backend is running and try again.',
-      );
+      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -128,10 +124,21 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 onFocus={() => setPasswordFocused(true)}
                 onBlur={() => setPasswordFocused(false)}
-                secureTextEntry
+                secureTextEntry={!showPassword}
                 returnKeyType="done"
                 onSubmitEditing={handleSignIn}
               />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.6}
+              >
+                <Feather
+                  name={showPassword ? 'eye-off' : 'eye'}
+                  size={18}
+                  color={C.textSecondary}
+                />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -139,6 +146,9 @@ export default function LoginScreen() {
             <Text style={styles.forgotText}>FORGOT PASSWORD?</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Inline error */}
+        {error && <Text style={styles.errorText}>{error}</Text>}
 
         {/* CTA */}
         <View style={styles.actions}>
@@ -277,6 +287,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 1,
     color: C.accent,
+  },
+  errorText: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 14,
+    color: '#FF4444',
+    textAlign: 'center',
+    marginTop: 8,
   },
 
   // Actions

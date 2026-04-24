@@ -16,18 +16,20 @@ import { AuthProvider, useAuth } from '@/contexts';
 SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const segments = useSegments();
+  const firstSegment = segments[0];
 
   useEffect(() => {
-    const inTabsGroup = segments[0] === '(tabs)';
+    if (isLoading) return;
+    const inTabsGroup = firstSegment === '(tabs)';
 
     if (!isAuthenticated && inTabsGroup) {
       router.replace('/login');
     } else if (isAuthenticated && !inTabsGroup) {
       router.replace('/(tabs)/');
     }
-  }, [isAuthenticated, segments[0]]);
+  }, [isAuthenticated, isLoading, firstSegment]);
 
   return (
     <Stack>
