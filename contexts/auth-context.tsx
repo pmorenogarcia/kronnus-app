@@ -1,33 +1,40 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { User } from '@/types';
+import { clearStoredToken, getStoredToken } from '@/src/api';
 
 interface AuthState {
   token: string | null;
-  user: User | null;
   isAuthenticated: boolean;
-  signIn: (token: string, user: User) => void;
-  signOut: () => void;
+  isLoading: boolean;
+  signIn: (token: string) => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  function signIn(newToken: string, newUser: User) {
+  useEffect(() => {
+    getStoredToken()
+      .then((stored) => {
+        if (stored) setToken(stored);
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  function signIn(newToken: string) {
     setToken(newToken);
-    setUser(newUser);
   }
 
-  function signOut() {
+  async function signOut() {
+    await clearStoredToken();
     setToken(null);
-    setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ token, user, isAuthenticated: !!token, signIn, signOut }}>
+    <AuthContext.Provider value={{ token, isAuthenticated: !!token, isLoading, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

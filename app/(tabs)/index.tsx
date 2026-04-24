@@ -2,8 +2,6 @@ import { Feather } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/contexts';
-
 const C = {
   bg: '#131313',
   bgHeader: '#0F0F0F',
@@ -67,10 +65,9 @@ const RANK_TEXT_COLORS: Record<number, string> = {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
 
-  const displayName = user?.name?.toUpperCase() ?? 'USER';
-  const initials = user?.initials ?? '??';
+  const displayName = 'USER';
+  const initials = '??';
 
   return (
     <View style={styles.root}>
