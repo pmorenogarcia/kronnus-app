@@ -26,7 +26,7 @@ function RootNavigator() {
 
     if (!isAuthenticated && inTabsGroup) {
       router.replace('/login');
-    } else if (isAuthenticated && !inTabsGroup) {
+    } else if (isAuthenticated && firstSegment === 'login') {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, firstSegment]);
@@ -35,6 +35,22 @@ function RootNavigator() {
     <Stack>
       <Stack.Screen name="login" options={{ headerShown: false, animation: 'fade' }} />
       <Stack.Screen name="(tabs)" options={{ headerShown: false, animation: 'fade' }} />
+      <Stack.Screen
+        name="create-session"
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="session-setup"
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="join-session"
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="waiting-room"
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
     </Stack>
   );
 }

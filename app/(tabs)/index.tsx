@@ -1,6 +1,12 @@
 import { Feather } from '@expo/vector-icons';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { useAuth } from '@/contexts';
+import { listMySessions, SessionError } from '@/src/api';
+import type { Session } from '@/src/api';
 
 const C = {
   bg: '#131313',
@@ -15,56 +21,71 @@ const C = {
   gold: '#EDD83D',
   silver: '#A2A7A5',
   bronze: '#8B5E3C',
+  draftBg: 'rgba(162,167,165,0.08)',
+  draftBorder: 'rgba(162,167,165,0.2)',
+  draftText: '#A2A7A5',
 };
 
-interface Competitor {
-  rank: number;
-  name: string;
-  time: string;
-}
-
-interface Session {
-  id: string;
-  name: string;
-  date: string;
-  competitors: number;
-  podium?: Competitor[];
-}
-
-const RECENT_SESSIONS: Session[] = [
-  {
-    id: '1',
-    name: 'City Marathon 2026',
-    date: '12 MAR 2026',
-    competitors: 8,
-    podium: [
-      { rank: 1, name: 'Miguel Santos', time: '01:24:38' },
-      { rank: 2, name: 'Ana Ferreira', time: '01:26:14' },
-      { rank: 3, name: 'Carlos Lima', time: '01:31:07' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Trail Serra da Estrela',
-    date: '08 MAR 2026',
-    competitors: 5,
-  },
+const MONTHS_ABBR = [
+  'JAN',
+  'FEB',
+  'MAR',
+  'APR',
+  'MAY',
+  'JUN',
+  'JUL',
+  'AUG',
+  'SEP',
+  'OCT',
+  'NOV',
+  'DEC',
 ];
 
-const RANK_COLORS: Record<number, string> = {
-  1: C.gold,
-  2: C.silver,
-  3: C.bronze,
-};
+function formatSessionDate(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getDate()} ${MONTHS_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+}
 
-const RANK_TEXT_COLORS: Record<number, string> = {
-  1: '#0F0F0F',
-  2: '#131313',
-  3: C.textPrimary,
+const SPORT_LABELS: Record<string, string> = {
+  ATHLETICS: 'ATHLETICS',
+  CYCLING: 'CYCLING',
+  TRAIL_RUNNING: 'TRAIL RUN',
+  SKI: 'SKI',
+  SNOWBOARD: 'SNOWBOARD',
 };
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
+  const { draftCreated, draftName } = useLocalSearchParams<{
+    draftCreated?: string;
+    draftName?: string;
+  }>();
+
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [loadError, setLoadError] = useState(false);
+
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastShown = useRef(false);
+
+  useEffect(() => {
+    if (!token) return;
+    listMySessions(token)
+      .then(setSessions)
+      .catch((e) => {
+        if (e instanceof SessionError) setLoadError(true);
+      });
+  }, [token, draftCreated]);
+
+  useEffect(() => {
+    if (draftCreated !== '1' || toastShown.current) return;
+    toastShown.current = true;
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 280, useNativeDriver: true }),
+      Animated.delay(2200),
+      Animated.timing(toastAnim, { toValue: 0, duration: 280, useNativeDriver: true }),
+    ]).start();
+  }, [draftCreated, toastAnim]);
 
   const displayName = 'USER';
   const initials = '??';
@@ -100,7 +121,11 @@ export default function HomeScreen() {
 
         {/* Action cards */}
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.createCard} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.createCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/create-session' as any)}
+          >
             <Feather name="plus" size={28} color="#0F0F0F" />
             <View style={styles.cardLabelGroup}>
               <Text style={styles.createCardTitle}>CREATE</Text>
@@ -108,7 +133,11 @@ export default function HomeScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.joinCard} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.joinCard}
+            activeOpacity={0.8}
+            onPress={() => router.push('/join-session' as any)}
+          >
             <Feather name="link" size={28} color={C.textMuted} />
             <View style={styles.cardLabelGroup}>
               <Text style={styles.joinCardTitle}>JOIN</Text>
@@ -120,53 +149,86 @@ export default function HomeScreen() {
         {/* Recent sessions */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>RECENT SESSIONS</Text>
-          <View style={styles.sessionCountBadge}>
-            <Text style={styles.sessionCountText}>{RECENT_SESSIONS.length}</Text>
-          </View>
+          {sessions.length > 0 && (
+            <View style={styles.sessionCountBadge}>
+              <Text style={styles.sessionCountText}>{sessions.length}</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.sessionList}>
-          {RECENT_SESSIONS.map((session) => (
-            <TouchableOpacity key={session.id} style={styles.sessionCard} activeOpacity={0.7}>
-              <View style={styles.sessionCardHeader}>
-                <View style={styles.sessionMeta}>
-                  <Text style={styles.sessionName}>{session.name}</Text>
-                  <Text style={styles.sessionInfo}>
-                    {session.date} · {session.competitors} COMPETITORS
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={16} color={C.textSecondary} />
-              </View>
+          {sessions.length === 0 && !loadError && (
+            <View style={styles.emptyState}>
+              <Feather name="clock" size={28} color={C.textSecondary} />
+              <Text style={styles.emptyTitle}>NO SESSIONS YET</Text>
+              <Text style={styles.emptyBody}>Create your first session to get started.</Text>
+            </View>
+          )}
 
-              {session.podium && (
-                <View style={styles.podium}>
-                  {session.podium.map((entry) => (
-                    <View key={entry.rank} style={styles.podiumRow}>
-                      <View
-                        style={[
-                          styles.rankBadge,
-                          { backgroundColor: RANK_COLORS[entry.rank] ?? C.textSecondary },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.rankText,
-                            { color: RANK_TEXT_COLORS[entry.rank] ?? C.textPrimary },
-                          ]}
-                        >
-                          {entry.rank}
-                        </Text>
-                      </View>
-                      <Text style={styles.competitorName}>{entry.name}</Text>
-                      <Text style={styles.competitorTime}>{entry.time}</Text>
+          {loadError && (
+            <View style={styles.emptyState}>
+              <Feather name="wifi-off" size={28} color={C.textSecondary} />
+              <Text style={styles.emptyTitle}>COULD NOT LOAD</Text>
+              <Text style={styles.emptyBody}>Check your connection and pull to refresh.</Text>
+            </View>
+          )}
+
+          {sessions.map((session) => {
+            const isDraft = session.status === 'DRAFT';
+            return (
+              <TouchableOpacity key={session.id} style={styles.sessionCard} activeOpacity={0.7}>
+                <View style={styles.sessionCardHeader}>
+                  <View style={styles.sessionMeta}>
+                    <View style={styles.sessionNameRow}>
+                      <Text style={styles.sessionName}>{session.name}</Text>
+                      {isDraft && (
+                        <View style={styles.draftBadge}>
+                          <Feather name="edit-2" size={9} color={C.draftText} />
+                          <Text style={styles.draftBadgeText}>DRAFT</Text>
+                        </View>
+                      )}
                     </View>
-                  ))}
+                    <Text style={styles.sessionInfo}>
+                      {formatSessionDate(session.session_date)} ·{' '}
+                      {SPORT_LABELS[session.sport] ?? session.sport}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={16} color={C.textSecondary} />
                 </View>
-              )}
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
+
+      {/* Draft saved toast */}
+      {draftCreated === '1' && (
+        <Animated.View
+          style={[
+            styles.toast,
+            {
+              opacity: toastAnim,
+              transform: [
+                {
+                  translateY: toastAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [12, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.toastIconWrap}>
+            <Feather name="check" size={13} color="#0F0F0F" />
+          </View>
+          <View style={styles.toastTextGroup}>
+            <Text style={styles.toastTitle} numberOfLines={1}>
+              {draftName ?? 'Session'} <Text style={styles.toastSubtitle}>saved as draft</Text>
+            </Text>
+          </View>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -364,11 +426,35 @@ const styles = StyleSheet.create({
     gap: 3,
     flex: 1,
   },
+  sessionNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   sessionName: {
     fontFamily: 'BarlowCondensed-Bold',
     fontSize: 18,
     letterSpacing: 0.4,
     color: C.textPrimary,
+  },
+  draftBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: C.draftBg,
+    borderWidth: 1,
+    borderColor: C.draftBorder,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  draftBadgeText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: C.draftText,
+    textTransform: 'uppercase',
   },
   sessionInfo: {
     fontFamily: 'Barlow-Regular',
@@ -378,38 +464,68 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  // Podium
-  podium: {
-    borderTopWidth: 1,
-    borderTopColor: C.border,
-    paddingTop: 10,
-    gap: 6,
-  },
-  podiumRow: {
-    flexDirection: 'row',
+  // Empty state
+  emptyState: {
     alignItems: 'center',
+    paddingVertical: 40,
     gap: 10,
   },
-  rankBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyTitle: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 14,
+    letterSpacing: 2,
+    color: C.textSecondary,
+    textTransform: 'uppercase',
   },
-  rankText: {
-    fontFamily: 'BarlowCondensed-Black',
-    fontSize: 11,
-  },
-  competitorName: {
-    flex: 1,
+  emptyBody: {
     fontFamily: 'Barlow-Regular',
     fontSize: 13,
+    color: C.textSecondary,
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+
+  // Draft toast
+  toast: {
+    position: 'absolute',
+    bottom: 96,
+    left: 16,
+    right: 16,
+    backgroundColor: '#1E1C1D',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  toastIconWrap: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: C.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  toastTextGroup: {
+    flex: 1,
+  },
+  toastTitle: {
+    fontFamily: 'Barlow-SemiBold',
+    fontSize: 14,
     color: C.textPrimary,
   },
-  competitorTime: {
-    fontFamily: 'SpaceMono-Regular',
-    fontSize: 12,
+  toastSubtitle: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 14,
     color: C.textMuted,
   },
 });
