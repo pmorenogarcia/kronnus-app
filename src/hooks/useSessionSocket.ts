@@ -7,9 +7,9 @@ import type { WsMessage } from '@/src/ws/messages';
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const MAX_ATTEMPTS = 6;
 
-function toWsUrl(sessionCode: string, token: string): string {
+function toWsUrl(sessionId: string, token: string): string {
   const base = API_BASE_URL.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
-  return `${base}/api/v1/sessions/${sessionCode}/ws?token=${encodeURIComponent(token)}`;
+  return `${base}/api/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(token)}`;
 }
 
 export type SocketStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -22,7 +22,7 @@ export interface UseSessionSocketReturn {
   disconnect: () => void;
 }
 
-export function useSessionSocket(sessionCode: string | null): UseSessionSocketReturn {
+export function useSessionSocket(sessionId: string | null): UseSessionSocketReturn {
   const { token } = useAuth();
 
   const [status, setStatus] = useState<SocketStatus>('disconnected');
@@ -36,14 +36,14 @@ export function useSessionSocket(sessionCode: string | null): UseSessionSocketRe
 
   // Updated every render so setTimeout callbacks always see the latest version
   // without stale closure issues — avoids listing volatile refs in useCallback deps.
-  const connectRef = useRef<(code: string, jwt: string) => void>(() => {});
+  const connectRef = useRef<(id: string, jwt: string) => void>(() => {});
 
-  connectRef.current = (code: string, jwt: string): void => {
+  connectRef.current = (id: string, jwt: string): void => {
     if (stoppedRef.current) return;
 
     setStatus('connecting');
 
-    const url = toWsUrl(code, jwt);
+    const url = toWsUrl(id, jwt);
 
     if (__DEV__) {
       console.log(`[WS] connecting (attempt ${attemptRef.current}):`, url);
@@ -99,7 +99,7 @@ export function useSessionSocket(sessionCode: string | null): UseSessionSocketRe
       attemptRef.current += 1;
 
       if (__DEV__) console.log(`[WS] reconnecting in ${delay}ms`);
-      timerRef.current = setTimeout(() => connectRef.current(code, jwt), delay);
+      timerRef.current = setTimeout(() => connectRef.current(id, jwt), delay);
     };
 
     ws.onerror = () => {
@@ -109,11 +109,11 @@ export function useSessionSocket(sessionCode: string | null): UseSessionSocketRe
   };
 
   useEffect(() => {
-    if (!sessionCode || !token) return;
+    if (!sessionId || !token) return;
 
     stoppedRef.current = false;
     attemptRef.current = 0;
-    connectRef.current(sessionCode, token);
+    connectRef.current(sessionId, token);
 
     return () => {
       stoppedRef.current = true;
@@ -126,7 +126,7 @@ export function useSessionSocket(sessionCode: string | null): UseSessionSocketRe
       wsRef.current = null;
       ws?.close();
     };
-  }, [sessionCode, token]);
+  }, [sessionId, token]);
 
   const send = useCallback((type: string, payload: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

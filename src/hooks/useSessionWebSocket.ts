@@ -15,20 +15,26 @@ export interface RemoteDevice {
   role: CheckpointRole;
 }
 
-// Assumed WS message types — align with ../kronnus-api when protocol is finalised
+interface DeviceConnectedPayload {
+  user_id: string;
+  session_id: string;
+  conn_id: string;
+}
+
+interface DeviceDisconnectedPayload {
+  user_id: string;
+  session_id: string;
+  conn_id: string;
+}
+
+interface RoleAssignedPayload {
+  user_id: string;
+  role: string;
+}
+
 interface WsMessage {
   type: string;
   payload?: unknown;
-}
-
-interface DeviceJoinedPayload {
-  device_id: string;
-  user_email?: string;
-  role: CheckpointRole;
-}
-
-interface DeviceLeftPayload {
-  device_id: string;
 }
 
 interface UseSessionWebSocketOptions {
@@ -70,16 +76,21 @@ export function useSessionWebSocket({
         return;
       }
 
-      if (msg.type === 'device_joined') {
-        const p = msg.payload as DeviceJoinedPayload;
+      if (msg.type === 'DEVICE_CONNECTED') {
+        const p = msg.payload as DeviceConnectedPayload;
         setRemoteDevices((prev) => {
-          if (prev.some((d) => d.id === p.device_id)) return prev;
-          return [...prev, { id: p.device_id, name: p.user_email ?? p.device_id, role: p.role }];
+          if (prev.some((d) => d.id === p.user_id)) return prev;
+          return [...prev, { id: p.user_id, name: p.user_id, role: 'SPLIT' }];
         });
-      } else if (msg.type === 'device_left') {
-        const p = msg.payload as DeviceLeftPayload;
-        setRemoteDevices((prev) => prev.filter((d) => d.id !== p.device_id));
-      } else if (msg.type === 'session_started') {
+      } else if (msg.type === 'DEVICE_DISCONNECTED') {
+        const p = msg.payload as DeviceDisconnectedPayload;
+        setRemoteDevices((prev) => prev.filter((d) => d.id !== p.user_id));
+      } else if (msg.type === 'ROLE_ASSIGNED') {
+        const p = msg.payload as RoleAssignedPayload;
+        setRemoteDevices((prev) =>
+          prev.map((d) => (d.id === p.user_id ? { ...d, role: p.role as CheckpointRole } : d)),
+        );
+      } else if (msg.type === 'SESSION_START') {
         setSessionStarted(true);
       }
     };
