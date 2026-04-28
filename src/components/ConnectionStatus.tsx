@@ -79,7 +79,7 @@ export function ConnectionStatus({ status, error }: ConnectionStatusProps) {
           />
           <View style={styles.dot} />
         </View>
-        <Text style={styles.label}>CONNECTED</Text>
+        <Text style={styles.label}>LIVE</Text>
       </View>
     );
   }
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
   },
   dotWrapper: {
     width: 10,
@@ -126,9 +126,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: C.accent,
     position: 'absolute',
   },
@@ -138,9 +138,9 @@ const styles = StyleSheet.create({
   },
   ring: {
     position: 'absolute',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: C.accentGlow,
   },
   spinner: {
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   label: {
     fontFamily: 'BarlowCondensed-Bold',
     fontSize: 12,
-    letterSpacing: 0.8,
+    letterSpacing: 1.9,
     color: C.accent,
   },
   labelMuted: {
