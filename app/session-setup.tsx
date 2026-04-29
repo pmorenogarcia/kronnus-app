@@ -2,7 +2,7 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -18,9 +18,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { startSession, SessionError } from '@/src/api';
-import type { CheckpointRole } from '@/src/api';
-import { useSessionWebSocket } from '@/src/hooks';
+import { startSession, getSessionState, SessionError } from '@/src/api';
+import type { CheckpointRole, SessionCheckpointState } from '@/src/api';
 
 const C = {
   bg: '#131313',
@@ -83,12 +82,30 @@ export default function SessionSetupScreen() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<SessionCheckpointState[]>([]);
+  const [pollActive, setPollActive] = useState(false);
 
-  const { remoteDevices, isConnected } = useSessionWebSocket({
-    sessionId: session_id ?? '',
-    token: token ?? '',
-    enabled: !!session_id && !!token,
-  });
+  useEffect(() => {
+    if (!token || !code || code === '——') return;
+    let cancelled = false;
+    async function poll() {
+      try {
+        const state = await getSessionState(token!, code);
+        if (!cancelled) {
+          setCheckpoints(state.checkpoints);
+          setPollActive(true);
+        }
+      } catch {
+        if (!cancelled) setPollActive(false);
+      }
+    }
+    poll();
+    const iv = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [token, code]);
 
   function addCompetitor() {
     const trimmed = newCompetitorName.trim();
@@ -139,7 +156,7 @@ export default function SessionSetupScreen() {
     });
   }
 
-  const deviceCount = 1 + remoteDevices.length;
+  const deviceCount = 1 + checkpoints.length;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -236,7 +253,7 @@ export default function SessionSetupScreen() {
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionLabel}>CONNECTED DEVICES</Text>
             <View style={styles.deviceCountBadge}>
-              <View style={[styles.liveDot, isConnected && styles.liveDotConnected]} />
+              <View style={[styles.liveDot, pollActive && styles.liveDotConnected]} />
               <Text style={styles.deviceCountText}>{deviceCount}</Text>
             </View>
           </View>
@@ -258,15 +275,15 @@ export default function SessionSetupScreen() {
               </View>
             </View>
 
-            {/* Remote devices joined via WS */}
-            {remoteDevices.map((device) => {
-              const badge = ROLE_BADGE_STYLE[device.role];
-              const shortLabel =
-                ROLES.find((r) => r.value === device.role)?.shortLabel ?? device.role;
+            {/* Operators who joined via REST */}
+            {checkpoints.map((cp) => {
+              const role = cp.role as CheckpointRole;
+              const badge = ROLE_BADGE_STYLE[role] ?? { bg: '#252223', text: C.textMuted };
+              const shortLabel = ROLES.find((r) => r.value === role)?.shortLabel ?? role;
               return (
-                <View key={device.id} style={styles.deviceRow}>
+                <View key={cp.user_id} style={styles.deviceRow}>
                   <View style={styles.onlineDot} />
-                  <Text style={styles.deviceName}>{device.name}</Text>
+                  <Text style={styles.deviceName}>{cp.username}</Text>
                   <View style={[styles.roleBadge, { backgroundColor: badge.bg }]}>
                     <Text style={[styles.roleBadgeText, { color: badge.text }]}>{shortLabel}</Text>
                   </View>
@@ -274,7 +291,7 @@ export default function SessionSetupScreen() {
               );
             })}
 
-            {remoteDevices.length === 0 && (
+            {checkpoints.length === 0 && (
               <Text style={styles.emptyText}>Waiting for other devices to join…</Text>
             )}
           </View>

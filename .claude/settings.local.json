@@ -8,7 +8,10 @@
       "Bash(go build:*)",
       "Bash(export GOPATH=\"$HOME/go\")",
       "Bash(export PATH=\"$PATH:$GOPATH/bin\")",
-      "Bash(npx jest *)"
+      "Bash(npx jest *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

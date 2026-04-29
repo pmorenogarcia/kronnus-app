@@ -10,6 +10,7 @@ export {
   listMySessions,
   startSession,
   joinSession,
+  getSessionState,
 } from './client';
 export type {
   SportType,
@@ -18,4 +19,6 @@ export type {
   CreateSessionInput,
   Session,
   JoinSessionResponse,
+  SessionCheckpointState,
+  SessionStateResponse,
 } from './client';
