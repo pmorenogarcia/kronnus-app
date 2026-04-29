@@ -223,3 +223,33 @@ export async function joinSession(
 
   return (await response.json()) as JoinSessionResponse;
 }
+
+export interface SessionCheckpointState {
+  user_id: string;
+  username: string;
+  role: string;
+  synced: boolean;
+}
+
+export interface SessionStateResponse {
+  session: Session;
+  checkpoints: SessionCheckpointState[];
+}
+
+export async function getSessionState(
+  token: string,
+  sessionCode: string,
+): Promise<SessionStateResponse> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/state`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new SessionError('Could not connect to the server. Check your connection and try again.');
+  }
+  if (!response.ok) {
+    throw new SessionError('Failed to fetch session state.', response.status);
+  }
+  return (await response.json()) as SessionStateResponse;
+}
