@@ -41,3 +41,5 @@ jobs:
           --profile preview
           --platform android
           --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}
