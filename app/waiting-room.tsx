@@ -49,12 +49,11 @@ export default function WaitingRoomScreen() {
   const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
 
   const socket = useSessionSocket(session_id ?? null);
-  const { status, lastMessage } = socket;
+  const { status, sessionStarted } = socket;
 
   useTimeSync(socket, userId);
 
   const isConnected = status === 'connected';
-  const sessionStarted = lastMessage?.type === 'SESSION_START';
 
   useEffect(() => {
     if (!sessionStarted) return;

@@ -18,6 +18,7 @@ export interface UseSessionSocketReturn {
   status: SocketStatus;
   lastMessage: WsMessage | null;
   error: string | null;
+  sessionStarted: boolean;
   send: (type: string, payload: object) => void;
   disconnect: () => void;
 }
@@ -28,6 +29,7 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
   const [status, setStatus] = useState<SocketStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sessionStarted, setSessionStarted] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +73,9 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
       }
       if (__DEV__) console.log('[WS] ←', msg.type);
       setLastMessage(msg);
+
+      // Latch once — never resets so batching cannot cause the flag to be missed
+      if (msg.type === 'SESSION_START') setSessionStarted(true);
 
       // Server signalled session is over — stop reconnecting
       if (msg.type === 'SESSION_END') {
@@ -146,5 +151,5 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
     setStatus('disconnected');
   }, []);
 
-  return { status, lastMessage, error, send, disconnect };
+  return { status, lastMessage, error, sessionStarted, send, disconnect };
 }
