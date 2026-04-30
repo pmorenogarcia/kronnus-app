@@ -231,9 +231,69 @@ export interface SessionCheckpointState {
   synced: boolean;
 }
 
+export interface Competitor {
+  id: string;
+  session_id: string;
+  display_name: string;
+  bib_number: string;
+  created_at: string;
+}
+
 export interface SessionStateResponse {
   session: Session;
   checkpoints: SessionCheckpointState[];
+}
+
+export async function setCheckpointRole(
+  token: string,
+  sessionCode: string,
+  userId: string,
+  role: CheckpointRole,
+): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}/api/v1/sessions/${sessionCode}/checkpoints/${userId}/role`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      },
+    );
+  } catch {
+    throw new SessionError('Could not connect to the server. Check your connection and try again.');
+  }
+  if (!response.ok) {
+    throw new SessionError('Failed to assign role.', response.status);
+  }
+}
+
+export async function addCompetitor(
+  token: string,
+  sessionCode: string,
+  displayName: string,
+  bibNumber?: string,
+): Promise<Competitor> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/competitors`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ display_name: displayName, bib_number: bibNumber ?? '' }),
+    });
+  } catch {
+    throw new SessionError('Could not connect to the server. Check your connection and try again.');
+  }
+  if (!response.ok) {
+    throw new SessionError('Failed to add competitor.', response.status);
+  }
+  return (await response.json()) as Competitor;
 }
 
 export async function getSessionState(
