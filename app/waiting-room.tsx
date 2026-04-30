@@ -1,11 +1,28 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { useSessionWebSocket } from '@/src/hooks';
+import { useSessionSocket, useTimeSync } from '@/src/hooks';
+import type { SocketStatus } from '@/src/hooks';
+
+function getUserIdFromToken(token: string): string {
+  try {
+    const [, payload] = token.split('.');
+    const decoded = JSON.parse(atob(payload)) as { sub?: string };
+    return decoded.sub ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function statusDisplay(s: SocketStatus): string {
+  if (s === 'connected') return 'CONNECTED';
+  if (s === 'error') return 'ERROR';
+  return 'CONNECTING…';
+}
 
 const C = {
   bg: '#131313',
@@ -29,11 +46,15 @@ export default function WaitingRoomScreen() {
     role: string;
   }>();
 
-  const { sessionStarted, isConnected } = useSessionWebSocket({
-    sessionId: session_id ?? '',
-    token: token ?? '',
-    enabled: !!session_id && !!token,
-  });
+  const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
+
+  const socket = useSessionSocket(session_id ?? null);
+  const { status, lastMessage } = socket;
+
+  useTimeSync(socket, userId);
+
+  const isConnected = status === 'connected';
+  const sessionStarted = lastMessage?.type === 'SESSION_START';
 
   useEffect(() => {
     if (!sessionStarted) return;
@@ -82,9 +103,7 @@ export default function WaitingRoomScreen() {
             <Text style={styles.infoCardLabel}>STATUS</Text>
             <View style={styles.connectionRow}>
               <View style={[styles.connectionDot, isConnected && styles.connectionDotActive]} />
-              <Text style={[styles.infoCardValueAccent]}>
-                {isConnected ? 'CONNECTED' : 'CONNECTING…'}
-              </Text>
+              <Text style={[styles.infoCardValueAccent]}>{statusDisplay(status)}</Text>
             </View>
           </View>
         </View>
