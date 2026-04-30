@@ -158,7 +158,15 @@ export default function SessionSetupScreen() {
 
     switch (lastMessage.type) {
       case 'DEVICE_CONNECTED': {
-        // Fetch latest state to get username for the newly connected device
+        const { user_id } = lastMessage.payload;
+        // Optimistically restore connected=true before the REST response arrives
+        // so a reconnecting device is never left greyed-out while the fetch is in-flight
+        setDevices((prev) => {
+          const next = new Map(prev);
+          const d = next.get(user_id);
+          if (d) next.set(user_id, { ...d, connected: true });
+          return next;
+        });
         if (token && code && code !== '——') {
           getSessionState(token, code)
             .then((state) => mergeCheckpoints(state.checkpoints))
