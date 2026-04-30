@@ -11,6 +11,8 @@ export {
   startSession,
   joinSession,
   getSessionState,
+  setCheckpointRole,
+  addCompetitor,
 } from './client';
 export type {
   SportType,
@@ -21,4 +23,5 @@ export type {
   JoinSessionResponse,
   SessionCheckpointState,
   SessionStateResponse,
+  Competitor,
 } from './client';
