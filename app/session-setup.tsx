@@ -114,6 +114,9 @@ export default function SessionSetupScreen() {
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [confirmingEnd, setConfirmingEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const endConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─── Initial state load ───────────────────────────────────────────────────────
 
@@ -222,6 +225,11 @@ export default function SessionSetupScreen() {
         setStarting(false);
         break;
       }
+
+      case 'SESSION_END': {
+        router.replace('/(tabs)');
+        break;
+      }
     }
   }, [lastMessage, token, code, userId, name, mergeCheckpoints]);
 
@@ -265,6 +273,30 @@ export default function SessionSetupScreen() {
     send('SESSION_START', {});
     // Navigation happens in the SESSION_START WS handler above
   }
+
+  function handleEndSessionPress() {
+    if (!confirmingEnd) {
+      setConfirmingEnd(true);
+      if (endConfirmTimerRef.current) clearTimeout(endConfirmTimerRef.current);
+      endConfirmTimerRef.current = setTimeout(() => setConfirmingEnd(false), 5000);
+      return;
+    }
+    if (endConfirmTimerRef.current) clearTimeout(endConfirmTimerRef.current);
+    setEnding(true);
+    send('SESSION_END', {});
+    // Navigation happens when we receive the SESSION_END broadcast back
+  }
+
+  function cancelEndSession() {
+    if (endConfirmTimerRef.current) clearTimeout(endConfirmTimerRef.current);
+    setConfirmingEnd(false);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (endConfirmTimerRef.current) clearTimeout(endConfirmTimerRef.current);
+    };
+  }, []);
 
   async function handleAddCompetitor() {
     const name_ = newCompName.trim();
@@ -444,30 +476,75 @@ export default function SessionSetupScreen() {
         )}
       </ScrollView>
 
-      {/* Start Session Footer */}
+      {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        {!canStart && deviceList.length > 0 && (
+        {!canStart && deviceList.length > 0 && !confirmingEnd && (
           <Text style={styles.startHint}>
             Assign START + END roles and wait for all devices to sync
           </Text>
         )}
         <TouchableOpacity
-          style={[styles.startBtn, (!canStart || starting) && styles.startBtnDisabled]}
+          style={[
+            styles.startBtn,
+            (!canStart || starting || confirmingEnd) && styles.startBtnDisabled,
+          ]}
           onPress={handleStartSession}
           activeOpacity={0.85}
-          disabled={!canStart || starting}
+          disabled={!canStart || starting || confirmingEnd}
         >
           {starting ? (
             <ActivityIndicator size="small" color="#0F0F0F" />
           ) : (
             <>
-              <Feather name="play" size={18} color={canStart ? '#0F0F0F' : C.textSecondary} />
-              <Text style={[styles.startBtnText, !canStart && styles.startBtnTextDisabled]}>
+              <Feather
+                name="play"
+                size={18}
+                color={canStart && !confirmingEnd ? '#0F0F0F' : C.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.startBtnText,
+                  (!canStart || confirmingEnd) && styles.startBtnTextDisabled,
+                ]}
+              >
                 START SESSION
               </Text>
             </>
           )}
         </TouchableOpacity>
+
+        {!confirmingEnd ? (
+          <TouchableOpacity
+            style={styles.endBtn}
+            onPress={handleEndSessionPress}
+            activeOpacity={0.7}
+          >
+            <Feather name="x-circle" size={13} color={C.error} />
+            <Text style={styles.endBtnText}>END SESSION</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.endConfirmRow}>
+            <TouchableOpacity
+              style={styles.endConfirmBtn}
+              onPress={handleEndSessionPress}
+              activeOpacity={0.8}
+              disabled={ending}
+            >
+              {ending ? (
+                <ActivityIndicator size="small" color={C.error} />
+              ) : (
+                <Text style={styles.endConfirmBtnText}>CONFIRM END</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.endCancelBtn}
+              onPress={cancelEndSession}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.endCancelBtnText}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Add Competitor Modal */}
@@ -1007,5 +1084,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     letterSpacing: 1.5,
     color: '#0F0F0F',
+  },
+
+  // End session
+  endBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  endBtnText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 13,
+    letterSpacing: 1.5,
+    color: C.error,
+    textTransform: 'uppercase',
+  },
+  endConfirmRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  endConfirmBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(224,92,92,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(224,92,92,0.3)',
+    borderRadius: 12,
+    height: 46,
+  },
+  endConfirmBtnText: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 15,
+    letterSpacing: 1.5,
+    color: C.error,
+    textTransform: 'uppercase',
+  },
+  endCancelBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 12,
+    height: 46,
+    paddingHorizontal: 20,
+  },
+  endCancelBtnText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 14,
+    letterSpacing: 1.5,
+    color: C.textMuted,
+    textTransform: 'uppercase',
   },
 });
