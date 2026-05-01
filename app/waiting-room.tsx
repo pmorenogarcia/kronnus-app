@@ -2,6 +2,14 @@ import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
@@ -55,6 +63,14 @@ export default function WaitingRoomScreen() {
 
   const isConnected = status === 'connected';
 
+  const pulseOpacity = useSharedValue(1);
+  const pulseScale = useSharedValue(1);
+
+  const pulseAnimStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: pulseScale.value }],
+  }));
+
   const [sessionEnded, setSessionEnded] = useState(false);
 
   useEffect(() => {
@@ -71,6 +87,26 @@ export default function WaitingRoomScreen() {
       params: { role: role ?? 'SPLIT', session_code: session_code ?? '' },
     });
   }, [sessionStarted, role, session_code]);
+
+  useEffect(() => {
+    if (isConnected) {
+      pulseOpacity.value = withRepeat(
+        withTiming(0.25, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+      pulseScale.value = withRepeat(
+        withTiming(1.12, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(pulseOpacity);
+      pulseOpacity.value = withTiming(1, { duration: 300 });
+      cancelAnimation(pulseScale);
+      pulseScale.value = withTiming(1, { duration: 300 });
+    }
+  }, [isConnected]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -89,11 +125,11 @@ export default function WaitingRoomScreen() {
       {/* Content */}
       <View style={styles.content}>
         {/* Pulse ring indicator */}
-        <View style={styles.pulseOuter}>
+        <Animated.View style={[styles.pulseOuter, pulseAnimStyle]}>
           <View style={styles.pulseInner}>
             <Feather name="clock" size={28} color={C.accent} />
           </View>
-        </View>
+        </Animated.View>
 
         <Text style={styles.statusLabel}>WAITING FOR SESSION</Text>
         <Text style={styles.statusHeading}>Waiting for session{'\n'}to start</Text>
