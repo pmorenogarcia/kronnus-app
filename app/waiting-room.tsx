@@ -65,10 +65,15 @@ export default function WaitingRoomScreen() {
 
   const pulseOpacity = useSharedValue(1);
   const pulseScale = useSharedValue(1);
+  const bannerHeight = useSharedValue(0);
 
   const pulseAnimStyle = useAnimatedStyle(() => ({
     opacity: pulseOpacity.value,
     transform: [{ scale: pulseScale.value }],
+  }));
+
+  const bannerAnimStyle = useAnimatedStyle(() => ({
+    height: bannerHeight.value,
   }));
 
   const [sessionEnded, setSessionEnded] = useState(false);
@@ -87,6 +92,11 @@ export default function WaitingRoomScreen() {
       params: { role: role ?? 'SPLIT', session_code: session_code ?? '' },
     });
   }, [sessionStarted, role, session_code]);
+
+  useEffect(() => {
+    const target = status === 'error' && !sessionEnded ? 40 : 0;
+    bannerHeight.value = withTiming(target, { duration: 300 });
+  }, [status, sessionEnded]);
 
   useEffect(() => {
     if (isConnected) {
@@ -121,6 +131,11 @@ export default function WaitingRoomScreen() {
         </View>
         <View style={styles.backBtn} />
       </View>
+
+      {/* Connection banner */}
+      <Animated.View style={[styles.connectionBanner, bannerAnimStyle]}>
+        <Text style={styles.connectionBannerText}>Connection lost — reconnecting...</Text>
+      </Animated.View>
 
       {/* Content */}
       <View style={styles.content}>
@@ -346,6 +361,18 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: C.accent,
     letterSpacing: 1,
+  },
+  connectionBanner: {
+    overflow: 'hidden',
+    backgroundColor: '#3A2020',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectionBannerText: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 12,
+    color: '#E07070',
+    letterSpacing: 0.4,
   },
 
   // Role hint text (reused inside role card)
