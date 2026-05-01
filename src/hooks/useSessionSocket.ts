@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/contexts';
-import type { CheckpointRole } from '@/src/api/client';
+import type { CheckpointRole } from '@/src/api';
 import { computeBackoffMs } from '@/src/ws/backoff';
 import type { WsMessage } from '@/src/ws/messages';
 
@@ -84,7 +84,7 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
       // One-way latch: survives React 18 batching (see useTimeSync.ts for race details)
       if (msg.type === 'SYNC_READY') setSyncReadyReceived(true);
       // Updated on every ROLE_ASSIGNED — coordinator may reassign before session starts
-      if (msg.type === 'ROLE_ASSIGNED') setAssignedRole(msg.payload.role as CheckpointRole);
+      if (msg.type === 'ROLE_ASSIGNED') setAssignedRole(msg.payload.role);
 
       // Server signalled session is over — stop reconnecting
       if (msg.type === 'SESSION_END') {
