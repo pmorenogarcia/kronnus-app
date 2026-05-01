@@ -58,7 +58,7 @@ export interface UseTimeSyncReturn {
 // userId is sent for protocol completeness; the backend authenticates from the
 // WebSocket connection and overrides this field with the authoritative value.
 export function useTimeSync(socket: UseSessionSocketReturn, userId: string): UseTimeSyncReturn {
-  const { lastMessage, send } = socket;
+  const { lastMessage, send, syncReadyReceived } = socket;
 
   const [synced, setSynced] = useState(false);
   const [offsetMs, setOffsetMs] = useState<number | null>(null);
@@ -85,6 +85,31 @@ export function useTimeSync(socket: UseSessionSocketReturn, userId: string): Use
 
     send('SYNC_PING', { t1 });
   };
+
+  /*
+   * Race-condition guard: React 18 automatic batching collapses multiple setState
+   * calls within the same event into one render. If SYNC_READY and a subsequent
+   * message arrive before the next render, setLastMessage is called twice and only
+   * the last value survives — the useEffect on lastMessage never sees SYNC_READY.
+   *
+   * syncReadyReceived is a one-way latch in useSessionSocket set in the same
+   * onmessage handler as setLastMessage. Because it only ever flips false → true,
+   * it is always true by the time any effect runs, regardless of batching. This
+   * effect starts the ping sequence when lastMessage misses SYNC_READY. This effect
+   * is a fallback for first delivery only; reconnect scenarios are handled by the
+   * existing lastMessage effect because lastMessage will be set to the new SYNC_READY
+   * on reconnect.
+   */
+  useEffect(() => {
+    if (!syncReadyReceived || syncActiveRef.current) return;
+    syncActiveRef.current = true;
+    roundResultsRef.current = [];
+    if (pongTimeoutRef.current !== null) clearTimeout(pongTimeoutRef.current);
+    if (delayTimerRef.current !== null) clearTimeout(delayTimerRef.current);
+    setSyncInProgress(true);
+    setSynced(false);
+    doRoundRef.current();
+  }, [syncReadyReceived]);
 
   useEffect(() => {
     if (!lastMessage) return;

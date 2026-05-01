@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/contexts';
+import type { CheckpointRole } from '@/src/api';
 import { computeBackoffMs } from '@/src/ws/backoff';
 import type { WsMessage } from '@/src/ws/messages';
 
@@ -19,6 +20,8 @@ export interface UseSessionSocketReturn {
   lastMessage: WsMessage | null;
   error: string | null;
   sessionStarted: boolean;
+  syncReadyReceived: boolean;
+  assignedRole: CheckpointRole | null;
   send: (type: string, payload: object) => void;
   disconnect: () => void;
 }
@@ -30,6 +33,8 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [syncReadyReceived, setSyncReadyReceived] = useState(false);
+  const [assignedRole, setAssignedRole] = useState<CheckpointRole | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -76,6 +81,10 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
 
       // Latch once — never resets so batching cannot cause the flag to be missed
       if (msg.type === 'SESSION_START') setSessionStarted(true);
+      // One-way latch: survives React 18 batching (see useTimeSync.ts for race details)
+      if (msg.type === 'SYNC_READY') setSyncReadyReceived(true);
+      // Updated on every ROLE_ASSIGNED — coordinator may reassign before session starts
+      if (msg.type === 'ROLE_ASSIGNED') setAssignedRole(msg.payload.role);
 
       // Server signalled session is over — stop reconnecting
       if (msg.type === 'SESSION_END') {
@@ -151,5 +160,14 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
     setStatus('disconnected');
   }, []);
 
-  return { status, lastMessage, error, sessionStarted, send, disconnect };
+  return {
+    status,
+    lastMessage,
+    error,
+    sessionStarted,
+    syncReadyReceived,
+    assignedRole,
+    send,
+    disconnect,
+  };
 }

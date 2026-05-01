@@ -1,7 +1,15 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
@@ -49,11 +57,38 @@ export default function WaitingRoomScreen() {
   const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
 
   const socket = useSessionSocket(session_id ?? null);
-  const { status, sessionStarted } = socket;
+  const { status, sessionStarted, assignedRole, lastMessage } = socket;
 
-  useTimeSync(socket, userId);
+  const { synced, syncInProgress } = useTimeSync(socket, userId);
 
   const isConnected = status === 'connected';
+
+  const pulseOpacity = useSharedValue(1);
+  const pulseScale = useSharedValue(1);
+  const bannerHeight = useSharedValue(0);
+  const overlayOpacity = useSharedValue(0);
+
+  const pulseAnimStyle = useAnimatedStyle(() => ({
+    opacity: pulseOpacity.value,
+    transform: [{ scale: pulseScale.value }],
+  }));
+
+  const bannerAnimStyle = useAnimatedStyle(() => ({
+    height: bannerHeight.value,
+  }));
+
+  const overlayAnimStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  const [sessionEnded, setSessionEnded] = useState(false);
+
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'SESSION_END') return;
+    setSessionEnded(true);
+    const timer = setTimeout(() => router.replace('/(tabs)'), 2000);
+    return () => clearTimeout(timer);
+  }, [lastMessage]);
 
   useEffect(() => {
     if (!sessionStarted) return;
@@ -62,6 +97,37 @@ export default function WaitingRoomScreen() {
       params: { role: role ?? 'SPLIT', session_code: session_code ?? '' },
     });
   }, [sessionStarted, role, session_code]);
+
+  useEffect(() => {
+    if (sessionEnded) {
+      overlayOpacity.value = withTiming(1, { duration: 300 });
+    }
+  }, [sessionEnded]);
+
+  useEffect(() => {
+    const target = status === 'error' && !sessionEnded ? 40 : 0;
+    bannerHeight.value = withTiming(target, { duration: 300 });
+  }, [status, sessionEnded]);
+
+  useEffect(() => {
+    if (isConnected) {
+      pulseOpacity.value = withRepeat(
+        withTiming(0.25, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+      pulseScale.value = withRepeat(
+        withTiming(1.12, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(pulseOpacity);
+      pulseOpacity.value = withTiming(1, { duration: 300 });
+      cancelAnimation(pulseScale);
+      pulseScale.value = withTiming(1, { duration: 300 });
+    }
+  }, [isConnected]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -77,14 +143,19 @@ export default function WaitingRoomScreen() {
         <View style={styles.backBtn} />
       </View>
 
+      {/* Connection banner */}
+      <Animated.View style={[styles.connectionBanner, bannerAnimStyle]}>
+        <Text style={styles.connectionBannerText}>Connection lost — reconnecting...</Text>
+      </Animated.View>
+
       {/* Content */}
       <View style={styles.content}>
         {/* Pulse ring indicator */}
-        <View style={styles.pulseOuter}>
+        <Animated.View style={[styles.pulseOuter, pulseAnimStyle]}>
           <View style={styles.pulseInner}>
             <Feather name="clock" size={28} color={C.accent} />
           </View>
-        </View>
+        </Animated.View>
 
         <Text style={styles.statusLabel}>WAITING FOR SESSION</Text>
         <Text style={styles.statusHeading}>Waiting for session{'\n'}to start</Text>
@@ -107,11 +178,33 @@ export default function WaitingRoomScreen() {
           </View>
         </View>
 
-        <View style={styles.roleHintCard}>
-          <Feather name="user-check" size={14} color={C.textSecondary} />
-          <Text style={styles.roleHintText}>
-            Your checkpoint role will be assigned by the organiser before the session starts.
-          </Text>
+        {/* Sync status */}
+        <View style={styles.syncCard}>
+          {syncInProgress && !synced ? (
+            <>
+              <ActivityIndicator size="small" color={C.textSecondary} />
+              <Text style={styles.syncText}>Synchronising...</Text>
+            </>
+          ) : synced ? (
+            <>
+              <Feather name="check" size={14} color={C.accent} />
+              <Text style={[styles.syncText, styles.syncTextDone]}>Synchronised</Text>
+            </>
+          ) : (
+            <Text style={styles.syncTextMuted}>—</Text>
+          )}
+        </View>
+
+        {/* Checkpoint role */}
+        <View style={[styles.roleCard, assignedRole !== null && styles.roleCardAssigned]}>
+          <Feather name="user-check" size={14} color={assignedRole ? C.accent : C.textSecondary} />
+          {assignedRole ? (
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>{assignedRole}</Text>
+            </View>
+          ) : (
+            <Text style={styles.roleHintText}>Waiting for role assignment...</Text>
+          )}
         </View>
       </View>
 
@@ -126,6 +219,11 @@ export default function WaitingRoomScreen() {
           <Text style={styles.leaveBtnText}>LEAVE SESSION</Text>
         </TouchableOpacity>
       </View>
+      {sessionEnded && (
+        <Animated.View style={[styles.sessionEndOverlay, overlayAnimStyle]}>
+          <Text style={styles.sessionEndText}>Session ended</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -280,11 +378,32 @@ const styles = StyleSheet.create({
     color: C.accent,
     letterSpacing: 1,
   },
+  connectionBanner: {
+    overflow: 'hidden',
+    backgroundColor: '#3A2020',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  connectionBannerText: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 12,
+    color: '#E07070',
+    letterSpacing: 0.4,
+  },
 
-  // Role hint
-  roleHintCard: {
+  // Role hint text (reused inside role card)
+  roleHintText: {
+    flex: 1,
+    fontFamily: 'Barlow-Regular',
+    fontSize: 13,
+    color: C.textMuted,
+    lineHeight: 20,
+  },
+
+  // Sync card
+  syncCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: C.bgCard,
     borderRadius: 12,
     borderWidth: 1,
@@ -294,12 +413,51 @@ const styles = StyleSheet.create({
     gap: 10,
     width: '100%',
   },
-  roleHintText: {
-    flex: 1,
+  syncText: {
     fontFamily: 'Barlow-Regular',
     fontSize: 13,
     color: C.textMuted,
-    lineHeight: 20,
+  },
+  syncTextDone: {
+    fontFamily: 'BarlowCondensed-Bold',
+    color: C.accent,
+  },
+  syncTextMuted: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 13,
+    color: C.textSecondary,
+  },
+
+  // Role card
+  roleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.bgCard,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
+    width: '100%',
+  },
+  roleCardAssigned: {
+    backgroundColor: C.accentSubtle,
+    borderColor: C.accentBorder,
+  },
+  roleBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: C.accentSubtle,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+  },
+  roleBadgeText: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 14,
+    letterSpacing: 1.5,
+    color: C.accent,
   },
 
   // Footer
@@ -321,6 +479,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 2,
     color: C.textMuted,
+    textTransform: 'uppercase',
+  },
+  sessionEndOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 40,
+    zIndex: 100,
+  },
+  sessionEndText: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 28,
+    letterSpacing: 2,
+    color: '#E2DADB',
     textTransform: 'uppercase',
   },
 });

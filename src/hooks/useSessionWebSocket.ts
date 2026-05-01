@@ -29,7 +29,7 @@ interface DeviceDisconnectedPayload {
 
 interface RoleAssignedPayload {
   user_id: string;
-  role: string;
+  role: CheckpointRole;
 }
 
 interface WsMessage {
@@ -88,7 +88,7 @@ export function useSessionWebSocket({
       } else if (msg.type === 'ROLE_ASSIGNED') {
         const p = msg.payload as RoleAssignedPayload;
         setRemoteDevices((prev) =>
-          prev.map((d) => (d.id === p.user_id ? { ...d, role: p.role as CheckpointRole } : d)),
+          prev.map((d) => (d.id === p.user_id ? { ...d, role: p.role } : d)),
         );
       } else if (msg.type === 'SESSION_START') {
         setSessionStarted(true);

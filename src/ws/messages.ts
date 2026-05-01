@@ -1,6 +1,8 @@
 // All WebSocket message types exchanged with kronnus-api.
 // Must stay in sync with the backend protocol (internal/ws/message.go).
 
+import type { CheckpointRole } from '@/src/api';
+
 type Envelope<T extends string, P extends object = Record<string, never>> = {
   type: T;
   payload: P;
@@ -29,9 +31,12 @@ export type SyncCompleteMsg = Envelope<
   { user_id: string; offset_ms: number; rtt_ms: number }
 >;
 
-export type RoleAssignMsg = Envelope<'ROLE_ASSIGN', { target_user_id: string; role: string }>;
+export type RoleAssignMsg = Envelope<
+  'ROLE_ASSIGN',
+  { target_user_id: string; role: CheckpointRole }
+>;
 
-export type RoleAssignedMsg = Envelope<'ROLE_ASSIGNED', { user_id: string; role: string }>;
+export type RoleAssignedMsg = Envelope<'ROLE_ASSIGNED', { user_id: string; role: CheckpointRole }>;
 
 export type SessionStartMsg = Envelope<'SESSION_START'>;
 
