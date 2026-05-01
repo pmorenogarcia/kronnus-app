@@ -66,6 +66,7 @@ export default function WaitingRoomScreen() {
   const pulseOpacity = useSharedValue(1);
   const pulseScale = useSharedValue(1);
   const bannerHeight = useSharedValue(0);
+  const overlayOpacity = useSharedValue(0);
 
   const pulseAnimStyle = useAnimatedStyle(() => ({
     opacity: pulseOpacity.value,
@@ -74,6 +75,10 @@ export default function WaitingRoomScreen() {
 
   const bannerAnimStyle = useAnimatedStyle(() => ({
     height: bannerHeight.value,
+  }));
+
+  const overlayAnimStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
   }));
 
   const [sessionEnded, setSessionEnded] = useState(false);
@@ -92,6 +97,12 @@ export default function WaitingRoomScreen() {
       params: { role: role ?? 'SPLIT', session_code: session_code ?? '' },
     });
   }, [sessionStarted, role, session_code]);
+
+  useEffect(() => {
+    if (sessionEnded) {
+      overlayOpacity.value = withTiming(1, { duration: 300 });
+    }
+  }, [sessionEnded]);
 
   useEffect(() => {
     const target = status === 'error' && !sessionEnded ? 40 : 0;
@@ -208,6 +219,11 @@ export default function WaitingRoomScreen() {
           <Text style={styles.leaveBtnText}>LEAVE SESSION</Text>
         </TouchableOpacity>
       </View>
+      {sessionEnded && (
+        <Animated.View style={[styles.sessionEndOverlay, overlayAnimStyle]}>
+          <Text style={styles.sessionEndText}>Session ended</Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -463,6 +479,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     letterSpacing: 2,
     color: C.textMuted,
+    textTransform: 'uppercase',
+  },
+  sessionEndOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: 40,
+    zIndex: 100,
+  },
+  sessionEndText: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 28,
+    letterSpacing: 2,
+    color: '#E2DADB',
     textTransform: 'uppercase',
   },
 });
