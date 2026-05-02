@@ -13,6 +13,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
+import type { CheckpointRole } from '@/src/api';
 import { useSessionSocket, useTimeSync } from '@/src/hooks';
 import type { SocketStatus } from '@/src/hooks';
 
@@ -57,7 +58,7 @@ export default function WaitingRoomScreen() {
   const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
 
   const socket = useSessionSocket(session_id ?? null);
-  const { status, sessionStarted, assignedRole, lastMessage } = socket;
+  const { status, sessionStarted, lastMessage } = socket;
 
   const { synced, syncInProgress } = useTimeSync(socket, userId);
 
@@ -82,6 +83,13 @@ export default function WaitingRoomScreen() {
   }));
 
   const [sessionEnded, setSessionEnded] = useState(false);
+  const [assignedRole, setAssignedRole] = useState<CheckpointRole | null>(null);
+
+  useEffect(() => {
+    if (!lastMessage || lastMessage.type !== 'ROLE_ASSIGNED') return;
+    if (lastMessage.payload.user_id !== userId) return;
+    setAssignedRole(lastMessage.payload.role);
+  }, [lastMessage, userId]);
 
   useEffect(() => {
     if (!lastMessage || lastMessage.type !== 'SESSION_END') return;
