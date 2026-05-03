@@ -25,3 +25,5 @@ export type {
   SessionStateResponse,
   Competitor,
 } from './client';
+export { captureTimestamp, assignCompetitor, listTimestamps, TimestampError } from './timestamps';
+export type { Timestamp } from './timestamps';
