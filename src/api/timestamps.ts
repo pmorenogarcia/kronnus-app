@@ -39,7 +39,14 @@ async function apiRequest<T>(
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   if (!res.ok) {
-    throw new TimestampError(`HTTP ${res.status}`, res.status);
+    let message = `HTTP ${res.status}`;
+    try {
+      const payload = (await res.json()) as { error?: string };
+      if (payload.error) message = payload.error;
+    } catch {
+      // ignore parse failure
+    }
+    throw new TimestampError(message, res.status);
   }
   return res.json() as Promise<T>;
 }
