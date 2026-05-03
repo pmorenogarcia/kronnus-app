@@ -296,6 +296,21 @@ export async function addCompetitor(
   return (await response.json()) as Competitor;
 }
 
+export async function listCompetitors(token: string, sessionCode: string): Promise<Competitor[]> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/competitors`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new SessionError('Could not connect to the server. Check your connection and try again.');
+  }
+  if (!response.ok) {
+    throw new SessionError('Failed to fetch competitors.', response.status);
+  }
+  return (await response.json()) as Competitor[];
+}
+
 export async function getSessionState(
   token: string,
   sessionCode: string,

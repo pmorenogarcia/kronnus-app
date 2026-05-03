@@ -13,6 +13,7 @@ export {
   getSessionState,
   setCheckpointRole,
   addCompetitor,
+  listCompetitors,
 } from './client';
 export type {
   SportType,

@@ -233,6 +233,7 @@ export default function SessionSetupScreen() {
             competitors: JSON.stringify(competitorsRef.current),
             session_start_ms: String(getCorrectedTimestampRef.current()),
             offset_ms: String(offsetMsRef.current ?? 0),
+            is_coordinator: 'true',
           },
         });
         break;
