@@ -93,7 +93,13 @@ export default function SessionSetupScreen() {
   // WebSocket + time sync (coordinator syncs automatically on mount)
   const socket = useSessionSocket(session_id ?? null);
   const { lastMessage, send, status } = socket;
-  useTimeSync(socket, userId);
+  const { getCorrectedTimestamp, offsetMs } = useTimeSync(socket, userId);
+
+  // Refs to avoid stale closures in the WS effect
+  const getCorrectedTimestampRef = useRef(getCorrectedTimestamp);
+  getCorrectedTimestampRef.current = getCorrectedTimestamp;
+  const offsetMsRef = useRef(offsetMs);
+  offsetMsRef.current = offsetMs;
 
   // Device state — keyed by user_id for O(1) WS event updates
   const [devices, setDevices] = useState<Map<string, DeviceEntry>>(new Map());
@@ -104,6 +110,10 @@ export default function SessionSetupScreen() {
 
   // Competitors
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
+
+  // Mirror competitors in a ref for use inside the SESSION_START WS handler
+  const competitorsRef = useRef<Competitor[]>([]);
+  competitorsRef.current = competitors;
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCompName, setNewCompName] = useState('');
   const [newCompBib, setNewCompBib] = useState('');
@@ -215,7 +225,15 @@ export default function SessionSetupScreen() {
         const myRole = devicesRef.current.get(userId)?.role ?? 'SPLIT';
         router.replace({
           pathname: '/(tabs)/timing' as never,
-          params: { role: myRole, session_name: name, session_code: code },
+          params: {
+            role: myRole,
+            session_name: name,
+            session_code: code,
+            session_id: session_id ?? '',
+            competitors: JSON.stringify(competitorsRef.current),
+            session_start_ms: String(getCorrectedTimestampRef.current()),
+            offset_ms: String(offsetMsRef.current ?? 0),
+          },
         });
         break;
       }
@@ -231,7 +249,7 @@ export default function SessionSetupScreen() {
         break;
       }
     }
-  }, [lastMessage, token, code, userId, name, mergeCheckpoints]);
+  }, [lastMessage, token, code, session_id, userId, name, mergeCheckpoints]);
 
   // ─── Derived state ────────────────────────────────────────────────────────────
 
