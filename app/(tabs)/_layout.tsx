@@ -62,7 +62,7 @@ export default function TabLayout() {
         name="results"
         options={{
           title: 'Results',
-          tabBarIcon: ({ color }) => <TabIcon name="bar-chart-2" label="RESULTS" color={color} />,
+          tabBarButton: () => null,
         }}
       />
       <Tabs.Screen

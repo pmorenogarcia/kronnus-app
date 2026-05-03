@@ -1,8 +1,9 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { router, Tabs, useLocalSearchParams } from 'expo-router';
+import { router, Tabs, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Dimensions,
   Pressable,
@@ -17,8 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts';
 import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/timestamps';
 import type { Timestamp } from '@/src/api/timestamps';
-import { listCompetitors } from '@/src/api';
-import type { Competitor } from '@/src/api';
+import { getSessionState, listCompetitors, listSessions } from '@/src/api';
+import type { Competitor, Session } from '@/src/api';
 import { useSessionSocket } from '@/src/hooks';
 
 // ─── Design tokens (Paper) ────────────────────────────────────────────────────
@@ -81,9 +82,286 @@ interface QueuedCapture {
   capturedAtMs: number;
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function getUserIdFromToken(token: string): string {
+  try {
+    const [, payload] = token.split('.');
+    const decoded = JSON.parse(atob(payload)) as { sub?: string };
+    return decoded.sub ?? '';
+  } catch {
+    return '';
+  }
+}
+
+// ─── Timing Portal (shown when tab is accessed without an active session) ────
+
+type PortalPhase =
+  | { kind: 'loading' }
+  | { kind: 'waiting_coord'; session: Session }
+  | { kind: 'waiting_op'; session: Session; role: string }
+  | { kind: 'none' };
+
+function TimingPortal() {
+  const portalInsets = useSafeAreaInsets();
+  const { token } = useAuth();
+  const [phase, setPhase] = useState<PortalPhase>({ kind: 'loading' });
+
+  const userId = token ? getUserIdFromToken(token) : '';
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      let cancelled = false;
+
+      async function detect() {
+        try {
+          const list = await listSessions(token!);
+          if (cancelled) return;
+
+          const active = list.find((s) => s.status === 'ACTIVE');
+          if (active) {
+            const isCoordinator = active.created_by === userId;
+            router.replace({
+              pathname: '/(tabs)/timing' as never,
+              params: {
+                session_id: active.id,
+                session_code: active.session_code,
+                session_name: active.name,
+                is_coordinator: isCoordinator ? 'true' : 'false',
+                offset_ms: '0',
+              },
+            });
+            return;
+          }
+
+          const waiting = list.find((s) => s.status === 'WAITING');
+          if (waiting) {
+            if (waiting.created_by === userId) {
+              setPhase({ kind: 'waiting_coord', session: waiting });
+              return;
+            }
+            try {
+              const state = await getSessionState(token!, waiting.session_code);
+              if (cancelled) return;
+              const myCheckpoint = state.checkpoints.find((cp) => cp.user_id === userId);
+              setPhase({
+                kind: 'waiting_op',
+                session: waiting,
+                role: myCheckpoint?.role ?? 'START',
+              });
+            } catch {
+              setPhase({ kind: 'waiting_coord', session: waiting });
+            }
+            return;
+          }
+
+          setPhase({ kind: 'none' });
+        } catch {
+          setPhase({ kind: 'none' });
+        }
+      }
+
+      detect();
+      return () => {
+        cancelled = true;
+      };
+    }, [token, userId]),
+  );
+
+  const P = portalStyles;
+
+  if (phase.kind === 'loading') {
+    return (
+      <View style={[P.root, { paddingTop: portalInsets.top }]}>
+        <Tabs.Screen options={{ headerShown: false }} />
+        <View style={P.centerWrap}>
+          <ActivityIndicator color={portalC.accent} size="small" />
+        </View>
+      </View>
+    );
+  }
+
+  if (phase.kind === 'waiting_coord') {
+    const s = phase.session;
+    return (
+      <View style={[P.root, { paddingTop: portalInsets.top }]}>
+        <Tabs.Screen options={{ headerShown: false }} />
+        <View style={P.centerWrap}>
+          <View style={P.card}>
+            <View style={P.cardIcon}>
+              <Feather name="clock" size={22} color={portalC.accent} />
+            </View>
+            <Text style={P.cardTitle}>{s.name.toUpperCase()}</Text>
+            <Text style={P.cardSub}>Session is waiting — set up devices and start.</Text>
+            <TouchableOpacity
+              style={P.ctaBtn}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname: '/session-setup' as never,
+                  params: {
+                    session_id: s.id,
+                    session_code: s.session_code,
+                    session_name: s.name,
+                  },
+                })
+              }
+            >
+              <Text style={P.ctaBtnText}>OPEN SETUP</Text>
+              <Feather name="arrow-right" size={14} color="#0F0F0F" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  if (phase.kind === 'waiting_op') {
+    const s = phase.session;
+    return (
+      <View style={[P.root, { paddingTop: portalInsets.top }]}>
+        <Tabs.Screen options={{ headerShown: false }} />
+        <View style={P.centerWrap}>
+          <View style={P.card}>
+            <View style={P.cardIcon}>
+              <Feather name="wifi" size={22} color={portalC.accent} />
+            </View>
+            <Text style={P.cardTitle}>{s.name.toUpperCase()}</Text>
+            <Text style={P.cardSub}>Waiting for session to start — reconnect to your spot.</Text>
+            <TouchableOpacity
+              style={P.ctaBtn}
+              activeOpacity={0.8}
+              onPress={() =>
+                router.push({
+                  pathname: '/waiting-room' as never,
+                  params: {
+                    session_id: s.id,
+                    session_code: s.session_code,
+                    role: phase.role,
+                  },
+                })
+              }
+            >
+              <Text style={P.ctaBtnText}>RECONNECT</Text>
+              <Feather name="arrow-right" size={14} color="#0F0F0F" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  // none
+  return (
+    <View style={[P.root, { paddingTop: portalInsets.top }]}>
+      <Tabs.Screen options={{ headerShown: false }} />
+      <View style={P.centerWrap}>
+        <Feather name="clock" size={32} color={portalC.textSecondary} />
+        <Text style={P.noneTitle}>NO ACTIVE SESSION</Text>
+        <Text style={P.noneSub}>Create or join a session from the Home tab to get started.</Text>
+      </View>
+    </View>
+  );
+}
+
+const portalC = {
+  bg: '#131313',
+  bgCard: '#1A1819',
+  accent: '#EDD83D',
+  border: '#2A2728',
+  textPrimary: '#E2DADB',
+  textSecondary: '#6D696A',
+  textMuted: '#A2A7A5',
+};
+
+const portalStyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: portalC.bg },
+  centerWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: portalC.bgCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: portalC.border,
+    padding: 24,
+    alignItems: 'center',
+    gap: 10,
+  },
+  cardIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: 'rgba(237,216,61,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(237,216,61,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  cardTitle: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 20,
+    letterSpacing: 1,
+    color: portalC.textPrimary,
+    textAlign: 'center',
+  },
+  cardSub: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 13,
+    color: portalC.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 6,
+  },
+  ctaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: portalC.accent,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+  },
+  ctaBtnText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 14,
+    letterSpacing: 1.4,
+    color: '#0F0F0F',
+  },
+  noneTitle: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 16,
+    letterSpacing: 2,
+    color: portalC.textSecondary,
+    textTransform: 'uppercase',
+    marginTop: 8,
+  },
+  noneSub: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 13,
+    color: portalC.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    maxWidth: 260,
+  },
+});
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function TimingScreen() {
+  const { session_id } = useLocalSearchParams<{ session_id?: string }>();
+  if (!session_id) return <TimingPortal />;
+  return <TimingContent />;
+}
+
+function TimingContent() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
 
