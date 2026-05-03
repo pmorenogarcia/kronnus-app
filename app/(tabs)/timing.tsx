@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { assignCompetitor, captureTimestamp } from '@/src/api/timestamps';
+import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/timestamps';
 import type { Timestamp } from '@/src/api/timestamps';
 import { listCompetitors } from '@/src/api';
 import type { Competitor } from '@/src/api';
@@ -95,6 +95,7 @@ export default function TimingScreen() {
     session_start_ms,
     offset_ms,
     is_coordinator,
+    role,
   } = useLocalSearchParams<{
     session_code?: string;
     session_name?: string;
@@ -103,6 +104,7 @@ export default function TimingScreen() {
     session_start_ms?: string;
     offset_ms?: string;
     is_coordinator?: string;
+    role?: string;
   }>();
 
   const isCoordinator = is_coordinator === 'true';
@@ -174,6 +176,7 @@ export default function TimingScreen() {
   // ─── Capture state ────────────────────────────────────────────────────────
 
   const [pendingCapture, setPendingCapture] = useState<PendingCapture | null>(null);
+  const [assignError, setAssignError] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueuedCapture[]>([]);
   const [flushing, setFlushing] = useState(false);
   // competitorId → elapsed ms at capture
@@ -229,6 +232,7 @@ export default function TimingScreen() {
   }
 
   function closeModal() {
+    setAssignError(null);
     Animated.parallel([
       Animated.timing(modalSlide, {
         toValue: SCREEN_HEIGHT,
@@ -288,14 +292,19 @@ export default function TimingScreen() {
 
   async function handleAssign(competitorId: string) {
     if (!token || !pendingCapture) return;
+    setAssignError(null);
     try {
       await assignCompetitor(token, code, pendingCapture.timestamp.id, competitorId);
       const elapsed = pendingCapture.capturedAtMs - sessionStartMs;
       setAssignedMap((prev) => new Map(prev).set(competitorId, elapsed));
-    } catch {
-      /* timestamp stays unassigned in DB; operator can retry from list */
-    } finally {
       closeModal();
+    } catch (err) {
+      if (err instanceof TimestampError && err.statusCode === 422) {
+        setAssignError(err.message);
+        // keep modal open so operator sees the reason
+      } else {
+        closeModal();
+      }
     }
   }
 
@@ -403,6 +412,13 @@ export default function TimingScreen() {
         <Text style={styles.sessionName} numberOfLines={1}>
           {sessionName.toUpperCase()}
         </Text>
+
+        {role ? (
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleBadgeText}>{role}</Text>
+          </View>
+        ) : null}
+
         <Text style={styles.elapsedLabel}>ELAPSED TIME</Text>
 
         {/* Timer */}
@@ -563,6 +579,14 @@ export default function TimingScreen() {
               )}
             </ScrollView>
 
+            {/* Assignment error */}
+            {assignError && (
+              <View style={styles.assignErrorBox}>
+                <Feather name="alert-triangle" size={12} color="#E05C5C" />
+                <Text style={styles.assignErrorText}>{assignError}</Text>
+              </View>
+            )}
+
             {/* Discard */}
             <View style={styles.discardRow}>
               <TouchableOpacity style={styles.discardBtn} onPress={closeModal} activeOpacity={0.7}>
@@ -711,6 +735,24 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: C.textSecondary,
     marginBottom: 8,
+  },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: C.accentBg,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+    marginBottom: 12,
+  },
+  roleBadgeText: {
+    fontFamily: 'BarlowCondensed-Black',
+    fontSize: 13,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    color: C.accent,
   },
   elapsedLabel: {
     fontFamily: 'Barlow-Regular',
@@ -1037,6 +1079,26 @@ const styles = StyleSheet.create({
     color: C.textSecondary,
     textAlign: 'center',
     paddingVertical: 12,
+  },
+  assignErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: 'rgba(224,92,92,0.08)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(224,92,92,0.25)',
+  },
+  assignErrorText: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 12,
+    color: '#E05C5C',
+    flex: 1,
+    lineHeight: 17,
   },
   discardRow: {
     paddingTop: 16,
