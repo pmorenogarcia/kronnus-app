@@ -318,6 +318,20 @@ export default function ResultsScreen() {
                         {r.display_name}
                       </Text>
                       {r.bib_number ? <Text style={styles.rowBib}>#{r.bib_number}</Text> : null}
+                      {r.segments.length > 0 && (
+                        <View style={styles.segmentList}>
+                          {r.segments.map((seg, si) => (
+                            <View key={si} style={styles.segmentRow}>
+                              <Text style={styles.segmentLabel}>
+                                {seg.from_role} → {seg.to_role}
+                              </Text>
+                              <Text style={styles.segmentTime}>
+                                {formatElapsedMs(seg.elapsed_ms)}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </View>
                     <View style={styles.rowTimes}>
                       <Text style={[styles.rowTime, i === 0 && styles.rowTimeFirst]}>
@@ -680,6 +694,27 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceMono-Regular',
     fontSize: 10,
     color: C.textSecondary,
+  },
+  segmentList: {
+    marginTop: 4,
+    gap: 2,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  segmentLabel: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 9,
+    letterSpacing: 1,
+    color: C.textSecondary,
+    textTransform: 'uppercase',
+  },
+  segmentTime: {
+    fontFamily: 'SpaceMono-Regular',
+    fontSize: 9,
+    color: C.textMuted,
   },
 
   // ── Empty state ──
