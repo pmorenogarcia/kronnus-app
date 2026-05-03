@@ -26,6 +26,7 @@ export type {
   SessionStateResponse,
   Competitor,
 } from './client';
+export { listSessions, deleteSession } from './sessions';
 export { captureTimestamp, assignCompetitor, listTimestamps, TimestampError } from './timestamps';
 export type { Timestamp } from './timestamps';
 export { getResults } from './results';

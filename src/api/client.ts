@@ -55,6 +55,9 @@ export interface Session {
   session_code: string;
   session_date: string;
   created_at: string;
+  created_by?: string;
+  competitor_count?: number;
+  checkpoint_count?: number;
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
