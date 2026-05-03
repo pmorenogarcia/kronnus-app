@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -60,7 +60,12 @@ export default function WaitingRoomScreen() {
   const socket = useSessionSocket(session_id ?? null);
   const { status, sessionStarted, lastMessage } = socket;
 
-  const { synced, syncInProgress } = useTimeSync(socket, userId);
+  const { synced, syncInProgress, getCorrectedTimestamp, offsetMs } = useTimeSync(socket, userId);
+
+  const getCorrectedTimestampRef = useRef(getCorrectedTimestamp);
+  getCorrectedTimestampRef.current = getCorrectedTimestamp;
+  const offsetMsRef = useRef(offsetMs);
+  offsetMsRef.current = offsetMs;
 
   const isConnected = status === 'connected';
 
@@ -102,9 +107,16 @@ export default function WaitingRoomScreen() {
     if (!sessionStarted) return;
     router.replace({
       pathname: '/(tabs)/timing' as any,
-      params: { role: role ?? 'SPLIT', session_code: session_code ?? '' },
+      params: {
+        role: role ?? 'SPLIT',
+        session_code: session_code ?? '',
+        session_id: session_id ?? '',
+        session_start_ms: String(getCorrectedTimestampRef.current()),
+        offset_ms: String(offsetMsRef.current ?? 0),
+        is_coordinator: 'false',
+      },
     });
-  }, [sessionStarted, role, session_code]);
+  }, [sessionStarted, role, session_code, session_id]);
 
   useEffect(() => {
     if (sessionEnded) {

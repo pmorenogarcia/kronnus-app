@@ -1,7 +1,7 @@
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { router, Tabs, useLocalSearchParams } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts';
 import { assignCompetitor, captureTimestamp } from '@/src/api/timestamps';
 import type { Timestamp } from '@/src/api/timestamps';
+import { listCompetitors } from '@/src/api';
 import type { Competitor } from '@/src/api';
 import { useSessionSocket } from '@/src/hooks';
 
@@ -93,6 +94,7 @@ export default function TimingScreen() {
     competitors: competitorsParam,
     session_start_ms,
     offset_ms,
+    is_coordinator,
   } = useLocalSearchParams<{
     session_code?: string;
     session_name?: string;
@@ -100,7 +102,10 @@ export default function TimingScreen() {
     competitors?: string;
     session_start_ms?: string;
     offset_ms?: string;
+    is_coordinator?: string;
   }>();
+
+  const isCoordinator = is_coordinator === 'true';
 
   const code = session_code ?? '';
   const sessionName = session_name ?? '';
@@ -113,22 +118,39 @@ export default function TimingScreen() {
 
   const getCorrectedTimestamp = useCallback(() => Date.now() + offsetMs, [offsetMs]);
 
-  const competitors = useMemo<Competitor[]>(() => {
+  const [competitors, setCompetitors] = useState<Competitor[]>(() => {
     if (!competitorsParam) return [];
     try {
       return JSON.parse(competitorsParam) as Competitor[];
     } catch {
       return [];
     }
-  }, [competitorsParam]);
+  });
+
+  // Operators arrive from waiting-room without competitors in params — fetch them
+  useEffect(() => {
+    if (competitorsParam || !token || !code) return;
+    let cancelled = false;
+    listCompetitors(token, code)
+      .then((list) => {
+        if (!cancelled) setCompetitors(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token, code, competitorsParam]);
 
   // ─── WebSocket ────────────────────────────────────────────────────────────
 
   const socket = useSessionSocket(session_id ?? null);
   const { lastMessage, send, status: wsStatus } = socket;
 
+  const [sessionEnded, setSessionEnded] = useState(false);
+
   useEffect(() => {
     if (lastMessage?.type === 'SESSION_END') {
+      setSessionEnded(true);
       router.replace({
         pathname: '/(tabs)/results' as never,
         params: { session_code: code },
@@ -140,11 +162,12 @@ export default function TimingScreen() {
 
   const [elapsedMs, setElapsedMs] = useState(0);
   useEffect(() => {
+    if (sessionEnded) return;
     const id = setInterval(() => {
       setElapsedMs(getCorrectedTimestamp() - sessionStartMs);
     }, 50);
     return () => clearInterval(id);
-  }, [getCorrectedTimestamp, sessionStartMs]);
+  }, [getCorrectedTimestamp, sessionStartMs, sessionEnded]);
 
   const { hms, cs } = formatElapsed(elapsedMs);
 
@@ -334,24 +357,26 @@ export default function TimingScreen() {
           <Text style={styles.liveText}>LIVE</Text>
         </View>
 
-        {confirmFinish ? (
-          <TouchableOpacity
-            style={styles.finishConfirmBtn}
-            onPress={handleFinishPress}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.finishConfirmText}>CONFIRM END</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={styles.finishBtn}
-            onPress={handleFinishPress}
-            activeOpacity={0.7}
-          >
-            <Feather name="flag" size={14} color={C.accent} />
-            <Text style={styles.finishText}>FINISH</Text>
-          </TouchableOpacity>
-        )}
+        {isCoordinator &&
+          (confirmFinish ? (
+            <TouchableOpacity
+              style={styles.finishConfirmBtn}
+              onPress={handleFinishPress}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.finishConfirmText}>CONFIRM END</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.finishBtn}
+              onPress={handleFinishPress}
+              activeOpacity={0.7}
+            >
+              <Feather name="flag" size={14} color={C.accent} />
+              <Text style={styles.finishText}>FINISH</Text>
+            </TouchableOpacity>
+          ))}
+        {!isCoordinator && <View style={styles.backBtn} />}
       </View>
 
       {/* ── Timer zone ── */}
