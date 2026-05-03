@@ -149,16 +149,23 @@ export default function TimingScreen() {
   const { lastMessage, send, status: wsStatus } = socket;
 
   const [sessionEnded, setSessionEnded] = useState(false);
+  const navigatedRef = useRef(false);
+
+  const navigateToResults = useCallback(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    setSessionEnded(true);
+    router.replace({
+      pathname: '/(tabs)/results' as never,
+      params: { session_code: code },
+    });
+  }, [code]);
 
   useEffect(() => {
     if (lastMessage?.type === 'SESSION_END') {
-      setSessionEnded(true);
-      router.replace({
-        pathname: '/(tabs)/results' as never,
-        params: { session_code: code },
-      });
+      navigateToResults();
     }
-  }, [lastMessage, code]);
+  }, [lastMessage, navigateToResults]);
 
   // ─── Timer ────────────────────────────────────────────────────────────────
 
@@ -322,6 +329,7 @@ export default function TimingScreen() {
     }
     if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
     send('SESSION_END', {});
+    navigateToResults();
   }
 
   useEffect(
