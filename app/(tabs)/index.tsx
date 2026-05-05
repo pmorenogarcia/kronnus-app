@@ -47,16 +47,6 @@ function formatDate(iso: string): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function getUserIdFromToken(token: string): string {
-  try {
-    const [, payload] = token.split('.');
-    const decoded = JSON.parse(atob(payload)) as { sub?: string };
-    return decoded.sub ?? '';
-  } catch {
-    return '';
-  }
-}
-
 const SPORT_META: Record<string, { label: string; icon: string }> = {
   ATHLETICS: { label: 'ATHLETICS', icon: 'run' },
   CYCLING: { label: 'CYCLING', icon: 'bike' },
@@ -162,14 +152,13 @@ export default function HomeScreen() {
         });
         break;
       case 'ACTIVE': {
-        const userId = token ? getUserIdFromToken(token) : '';
         router.push({
           pathname: '/(tabs)/timing' as never,
           params: {
             session_id: session.id,
             session_code: session.session_code,
             session_name: session.name,
-            is_coordinator: session.created_by === userId ? 'true' : 'false',
+            is_coordinator: 'true',
             offset_ms: '0',
           },
         });
