@@ -9,10 +9,14 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Kronnus needs camera access to detect competitors crossing the checkpoint."
+      }
     },
     "android": {
       "package": "com.kronnus.app",
+      "permissions": ["android.permission.CAMERA"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -40,6 +44,7 @@
           }
         }
       ],
+      "expo-camera",
       "expo-secure-store",
       "expo-font",
       "expo-image",
