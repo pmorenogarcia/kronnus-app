@@ -51,6 +51,14 @@ function RootNavigator() {
         name="waiting-room"
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="register"
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="edit-profile"
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
     </Stack>
   );
 }

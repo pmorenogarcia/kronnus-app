@@ -141,10 +141,6 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           </View>
-
-          <TouchableOpacity style={styles.forgotRow} activeOpacity={0.7}>
-            <Text style={styles.forgotText}>FORGOT PASSWORD?</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Inline error */}
@@ -282,15 +278,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#F5F5F5',
     padding: 0,
-  },
-  forgotRow: {
-    alignSelf: 'flex-end',
-  },
-  forgotText: {
-    fontFamily: 'BarlowCondensed-Bold',
-    fontSize: 12,
-    letterSpacing: 1,
-    color: C.accent,
   },
   errorText: {
     fontFamily: 'Barlow-Regular',

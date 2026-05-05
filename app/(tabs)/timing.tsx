@@ -395,10 +395,22 @@ function TimingContent() {
       }
       let cancelled = false;
       setValidating(true);
-      listSessions(token)
-        .then((list) => {
+
+      // Coordinators own the session — verify via their session list.
+      // Operators joined someone else's session — use getSessionState instead,
+      // since listSessions only returns sessions the user created.
+      const checkActive =
+        is_coordinator === 'true'
+          ? listSessions(token).then((list) =>
+              list.some((s) => s.id === session_id && s.status === 'ACTIVE'),
+            )
+          : getSessionState(token, session_code ?? '').then(
+              (state) => state.session.status === 'ACTIVE',
+            );
+
+      checkActive
+        .then((isActive) => {
           if (cancelled) return;
-          const isActive = list.some((s) => s.id === session_id && s.status === 'ACTIVE');
           if (!isActive) {
             router.replace('/(tabs)/timing' as never);
           } else {
@@ -411,7 +423,7 @@ function TimingContent() {
       return () => {
         cancelled = true;
       };
-    }, [token, session_id]),
+    }, [token, session_id, is_coordinator, session_code]),
   );
 
   const { settings } = useSettings();

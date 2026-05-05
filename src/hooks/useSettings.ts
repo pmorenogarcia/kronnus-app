@@ -5,13 +5,11 @@ const SETTINGS_KEY = 'kronnus_settings';
 
 export interface AppSettings {
   language: 'en' | 'ca' | 'es';
-  sessionAlerts: boolean;
   soundEffects: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
   language: 'en',
-  sessionAlerts: true,
   soundEffects: true,
 };
 
