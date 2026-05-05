@@ -23,7 +23,7 @@ export interface UseCameraMotionDetectorOptions {
 }
 
 export interface UseCameraMotionDetectorReturn {
-  ref: React.RefObject<CameraView>;
+  ref: React.RefObject<CameraView | null>;
   isArmed: boolean;
   lastLuminance: number | null;
   baselineLuminance: number | null;
