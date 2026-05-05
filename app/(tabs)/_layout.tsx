@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 const C = {
   bgTab: '#0F0F0F',
@@ -19,7 +19,7 @@ interface TabIconProps {
 
 function TabIcon({ name, label, color }: TabIconProps) {
   return (
-    <>
+    <View style={styles.tabIconWrap}>
       <Feather name={name} size={22} color={color} />
       <Text
         style={[styles.tabLabel, { color }]}
@@ -29,7 +29,7 @@ function TabIcon({ name, label, color }: TabIconProps) {
       >
         {label}
       </Text>
-    </>
+    </View>
   );
 }
 
@@ -62,7 +62,8 @@ export default function TabLayout() {
         name="results"
         options={{
           title: 'Results',
-          tabBarIcon: ({ color }) => <TabIcon name="bar-chart-2" label="RESULTS" color={color} />,
+          tabBarButton: () => null,
+          tabBarItemStyle: { display: 'none' },
         }}
       />
       <Tabs.Screen
@@ -85,10 +86,14 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
   },
+  tabIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
   tabLabel: {
     fontFamily: 'BarlowCondensed-Bold',
     fontSize: 10,
     letterSpacing: 0,
-    marginTop: 4,
   },
 });
