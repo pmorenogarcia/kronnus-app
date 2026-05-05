@@ -237,7 +237,7 @@ export default function ProfileScreen() {
           <SettingRow
             icon="moon"
             label="Dark Mode"
-            description="(always on)"
+            description="(to be implemented · always on for now)"
             right={<Toggle value disabled />}
             isFirst
             isLast
@@ -248,6 +248,7 @@ export default function ProfileScreen() {
           <SettingRow
             icon="globe"
             label="Language"
+            description="(to be implemented)"
             right={
               <View style={styles.langValue}>
                 <Text style={styles.langValueText}>
@@ -296,21 +297,9 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* ── Notifications ── */}
-        <SectionHeader label="NOTIFICATIONS" />
+        {/* ── Sound ── */}
+        <SectionHeader label="SOUND" />
         <View style={styles.settingGroup}>
-          <SettingRow
-            icon="bell"
-            label="Session Alerts"
-            description="Notified when a session starts or ends"
-            right={
-              <Toggle
-                value={settings.sessionAlerts}
-                onToggle={() => void updateSetting('sessionAlerts', !settings.sessionAlerts)}
-              />
-            }
-            isFirst
-          />
           <SettingRow
             icon="volume-2"
             label="Sound Effects"
@@ -321,6 +310,7 @@ export default function ProfileScreen() {
                 onToggle={() => void updateSetting('soundEffects', !settings.soundEffects)}
               />
             }
+            isFirst
             isLast
           />
         </View>
