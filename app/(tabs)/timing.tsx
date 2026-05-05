@@ -1,5 +1,7 @@
 import { Feather } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { router, Tabs, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -20,7 +22,8 @@ import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/ti
 import type { Timestamp } from '@/src/api/timestamps';
 import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
-import { useSessionSocket, useSettings } from '@/src/hooks';
+import { CameraPermissionGate } from '@/src/components';
+import { useCameraMotionDetector, useSessionSocket, useSettings } from '@/src/hooks';
 
 // ─── Design tokens (Paper) ────────────────────────────────────────────────────
 
@@ -80,6 +83,7 @@ interface PendingCapture {
 
 interface QueuedCapture {
   capturedAtMs: number;
+  triggerType: 'BUTTON' | 'CAMERA';
 }
 
 // ─── Timing Portal (shown when tab is accessed without an active session) ────
@@ -494,7 +498,7 @@ function TimingContent() {
 
     const item = queue[0];
     setFlushing(true);
-    captureTimestamp(token, code, item.capturedAtMs)
+    captureTimestamp(token, code, item.capturedAtMs, item.triggerType)
       .then((ts) => {
         setQueue((prev) => prev.slice(1));
         openModal({ timestamp: ts, capturedAtMs: item.capturedAtMs });
@@ -582,7 +586,7 @@ function TimingContent() {
       const ts = await captureTimestamp(token, code, capturedAtMs);
       openModal({ timestamp: ts, capturedAtMs });
     } catch {
-      setQueue((prev) => [...prev, { capturedAtMs }]);
+      setQueue((prev) => [...prev, { capturedAtMs, triggerType: 'BUTTON' }]);
     }
   }
 
@@ -630,14 +634,80 @@ function TimingContent() {
     [],
   );
 
-  // ─── Camera tooltip ───────────────────────────────────────────────────────
+  // ─── Camera mode ──────────────────────────────────────────────────────────
 
-  const [showCameraTooltip, setShowCameraTooltip] = useState(false);
+  const [triggerMode, setTriggerMode] = useState<'button' | 'camera'>('button');
+  const [showPermissionGate, setShowPermissionGate] = useState(false);
+  const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
+  const permissionSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const [cameraPermission] = useCameraPermissions();
+  const cameraGranted = cameraPermission?.granted ?? false;
+
+  async function handleCameraCapture(capturedAtMs: number) {
+    const correctedAtMs = capturedAtMs + offsetMs;
+
+    Animated.sequence([
+      Animated.timing(flashAnim, { toValue: 1, duration: 55, useNativeDriver: true }),
+      Animated.timing(flashAnim, { toValue: 0, duration: 320, useNativeDriver: true }),
+    ]).start();
+
+    if (!token) return;
+
+    try {
+      const ts = await captureTimestamp(token, code, correctedAtMs, 'CAMERA');
+      openModal({ timestamp: ts, capturedAtMs: correctedAtMs });
+    } catch {
+      setQueue((prev) => [...prev, { capturedAtMs: correctedAtMs, triggerType: 'CAMERA' }]);
+    }
+  }
+
+  const { ref: cameraRef, isArmed } = useCameraMotionDetector({
+    enabled: triggerMode === 'camera',
+    sensitivity,
+    cooldownMs: 2000,
+    onTrigger: handleCameraCapture,
+  });
+
+  function openPermissionGate() {
+    setShowPermissionGate(true);
+    Animated.spring(permissionSlide, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+  }
+
+  function closePermissionGate() {
+    Animated.timing(permissionSlide, {
+      toValue: SCREEN_HEIGHT,
+      duration: 260,
+      useNativeDriver: true,
+    }).start(() => setShowPermissionGate(false));
+  }
 
   function handleCameraPress() {
-    setShowCameraTooltip(true);
-    setTimeout(() => setShowCameraTooltip(false), 2000);
+    if (cameraGranted) {
+      setTriggerMode('camera');
+    } else {
+      openPermissionGate();
+    }
   }
+
+  function handleButtonModePress() {
+    setTriggerMode('button');
+  }
+
+  // Keep-awake: prevent screen sleep in camera mode. Camera is NEVER active in button mode —
+  // important for battery and thermal management; always deactivate on mode switch or unmount.
+  useEffect(() => {
+    if (triggerMode !== 'camera') return;
+    void activateKeepAwakeAsync();
+    return () => {
+      deactivateKeepAwake();
+    };
+  }, [triggerMode]);
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
@@ -698,64 +768,139 @@ function TimingContent() {
 
       {/* ── Timer zone ── */}
       <View style={styles.timerZone}>
-        {/* Mode toggles — absolute top-right */}
+        {/* Live camera feed — only mounted in camera mode to conserve battery and heat */}
+        {triggerMode === 'camera' && (
+          <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back" />
+        )}
+
+        {/* Mode toggles — absolute top-right, always above camera feed */}
         <View style={styles.modeToggles}>
-          <View style={styles.modeActiveBtn}>
-            <Feather name="circle" size={20} color="#0F0F0F" />
-          </View>
           <TouchableOpacity
-            style={styles.modeInactiveBtn}
+            style={triggerMode === 'button' ? styles.modeActiveBtn : styles.modeInactiveBtn}
+            onPress={handleButtonModePress}
+            activeOpacity={0.7}
+          >
+            <Feather
+              name="circle"
+              size={20}
+              color={triggerMode === 'button' ? '#0F0F0F' : C.textMuted}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={triggerMode === 'camera' ? styles.modeActiveBtn : styles.modeInactiveBtn}
             onPress={handleCameraPress}
             activeOpacity={0.7}
           >
-            <Feather name="camera" size={20} color={C.textMuted} />
+            <Feather
+              name="camera"
+              size={20}
+              color={triggerMode === 'camera' ? '#0F0F0F' : C.textMuted}
+            />
           </TouchableOpacity>
-          {showCameraTooltip && (
-            <View style={styles.cameraTooltip}>
-              <Text style={styles.cameraTooltipText}>Coming soon</Text>
+        </View>
+
+        {triggerMode === 'button' ? (
+          <>
+            <Text style={styles.sessionName} numberOfLines={1}>
+              {sessionName.toUpperCase()}
+            </Text>
+
+            {role ? (
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>{role}</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.elapsedLabel}>ELAPSED TIME</Text>
+
+            {/* Timer */}
+            <View style={styles.timerRow}>
+              <Text style={styles.timerHms}>{hms}</Text>
+              <Text style={styles.timerCs}>{cs}</Text>
             </View>
-          )}
-        </View>
 
-        <Text style={styles.sessionName} numberOfLines={1}>
-          {sessionName.toUpperCase()}
-        </Text>
+            {/* Queue badge */}
+            {queue.length > 0 && (
+              <View style={styles.queueBadge}>
+                <Feather name="clock" size={11} color={C.accent} />
+                <Text style={styles.queueBadgeText}>{queue.length} queued</Text>
+              </View>
+            )}
 
-        {role ? (
-          <View style={styles.roleBadge}>
-            <Text style={styles.roleBadgeText}>{role}</Text>
-          </View>
-        ) : null}
+            {/* Bolt trigger button */}
+            <Animated.View style={[styles.boltContainer, { transform: [{ scale: scaleAnim }] }]}>
+              <View style={styles.boltAura} pointerEvents="none" />
+              <TouchableOpacity
+                style={styles.boltButton}
+                onPress={handleCapture}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                activeOpacity={1}
+              >
+                <Feather name="zap" size={32} color="#0F0F0F" />
+              </TouchableOpacity>
+            </Animated.View>
+          </>
+        ) : (
+          /* Camera mode overlay — centered content above the live feed */
+          <View style={styles.cameraOverlay}>
+            <Text style={styles.sessionName} numberOfLines={1}>
+              {sessionName.toUpperCase()}
+            </Text>
 
-        <Text style={styles.elapsedLabel}>ELAPSED TIME</Text>
+            {role ? (
+              <View style={styles.roleBadge}>
+                <Text style={styles.roleBadgeText}>{role}</Text>
+              </View>
+            ) : null}
 
-        {/* Timer */}
-        <View style={styles.timerRow}>
-          <Text style={styles.timerHms}>{hms}</Text>
-          <Text style={styles.timerCs}>{cs}</Text>
-        </View>
+            {/* Timer in a semi-transparent pill */}
+            <View style={styles.cameraTimerPill}>
+              <Text style={styles.elapsedLabel}>ELAPSED TIME</Text>
+              <View style={styles.timerRow}>
+                <Text style={styles.timerHms}>{hms}</Text>
+                <Text style={styles.timerCs}>{cs}</Text>
+              </View>
+            </View>
 
-        {/* Queue badge */}
-        {queue.length > 0 && (
-          <View style={styles.queueBadge}>
-            <Feather name="clock" size={11} color={C.accent} />
-            <Text style={styles.queueBadgeText}>{queue.length} queued</Text>
+            {/* Armed indicator — visible only after baseline warm-up completes */}
+            {isArmed && (
+              <View style={styles.armedIndicator}>
+                <View style={styles.armedDot} />
+                <Text style={styles.armedText}>ARMED</Text>
+              </View>
+            )}
+
+            {/* Three-segment sensitivity control */}
+            <View style={styles.sensitivityToggle}>
+              {(['low', 'medium', 'high'] as const).map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.sensitivityBtn, sensitivity === s && styles.sensitivityBtnActive]}
+                  onPress={() => setSensitivity(s)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.sensitivityText,
+                      sensitivity === s && styles.sensitivityTextActive,
+                    ]}
+                  >
+                    {s.toUpperCase()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Queue badge */}
+            {queue.length > 0 && (
+              <View style={styles.queueBadge}>
+                <Feather name="clock" size={11} color={C.accent} />
+                <Text style={styles.queueBadgeText}>{queue.length} queued</Text>
+              </View>
+            )}
           </View>
         )}
-
-        {/* Bolt trigger button */}
-        <Animated.View style={[styles.boltContainer, { transform: [{ scale: scaleAnim }] }]}>
-          <View style={styles.boltAura} pointerEvents="none" />
-          <TouchableOpacity
-            style={styles.boltButton}
-            onPress={handleCapture}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            activeOpacity={1}
-          >
-            <Feather name="zap" size={32} color="#0F0F0F" />
-          </TouchableOpacity>
-        </Animated.View>
       </View>
 
       {/* ── Competitors bar ── */}
@@ -905,6 +1050,21 @@ function TimingContent() {
           </Animated.View>
         </>
       )}
+
+      {/* ── Permission gate (slides up from bottom on camera toggle press) ── */}
+      {showPermissionGate && (
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, { transform: [{ translateY: permissionSlide }] }]}
+        >
+          <CameraPermissionGate
+            onGranted={() => {
+              closePermissionGate();
+              setTriggerMode('camera');
+            }}
+            onDenied={closePermissionGate}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -1024,21 +1184,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cameraTooltip: {
-    position: 'absolute',
-    top: 50,
-    right: 0,
-    backgroundColor: C.bgCardAlt,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: C.border,
+  // ── Camera overlay ──
+  cameraOverlay: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  cameraTooltipText: {
-    fontFamily: 'Barlow-Regular',
+  cameraTimerPill: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
+    gap: 4,
+  },
+  armedIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  armedDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#52C97B',
+  },
+  armedText: {
+    fontFamily: 'BarlowCondensed-Bold',
     fontSize: 12,
+    letterSpacing: 2,
+    color: '#52C97B',
+  },
+  sensitivityToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  sensitivityBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  sensitivityBtnActive: {
+    backgroundColor: C.accent,
+  },
+  sensitivityText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 12,
+    letterSpacing: 1.5,
     color: C.textMuted,
+  },
+  sensitivityTextActive: {
+    color: '#0F0F0F',
   },
   sessionName: {
     fontFamily: 'BarlowCondensed-Bold',
