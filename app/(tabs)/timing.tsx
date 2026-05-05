@@ -638,6 +638,7 @@ function TimingContent() {
 
   const [triggerMode, setTriggerMode] = useState<'button' | 'camera'>('button');
   const [showPermissionGate, setShowPermissionGate] = useState(false);
+  const [scrubberOpen, setScrubberOpen] = useState(false);
   const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
   const permissionSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
@@ -663,11 +664,23 @@ function TimingContent() {
   }
 
   const { ref: cameraRef, isArmed } = useCameraMotionDetector({
-    enabled: triggerMode === 'camera',
+    enabled: triggerMode === 'camera' && !scrubberOpen,
     sensitivity,
     cooldownMs: 2000,
     onTrigger: handleCameraCapture,
   });
+
+  function handleManualPress() {
+    setScrubberOpen(true);
+    router.push({
+      pathname: '/camera-scrubber' as never,
+      params: {
+        session_code: code,
+        ntp_offset_ms: String(offsetMs),
+        session_start_ms: String(sessionStartMs),
+      },
+    });
+  }
 
   function openPermissionGate() {
     setShowPermissionGate(true);
@@ -708,6 +721,13 @@ function TimingContent() {
       deactivateKeepAwake();
     };
   }, [triggerMode]);
+
+  // Re-arm detection when the scrubber modal closes and this screen regains focus
+  useFocusEffect(
+    useCallback(() => {
+      setScrubberOpen(false);
+    }, []),
+  );
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
@@ -771,6 +791,19 @@ function TimingContent() {
         {/* Live camera feed — only mounted in camera mode to conserve battery and heat */}
         {triggerMode === 'camera' && (
           <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back" />
+        )}
+
+        {/* Manual scrubber — absolute top-left, only visible in camera mode */}
+        {triggerMode === 'camera' && (
+          <TouchableOpacity
+            style={styles.manualBtn}
+            onPress={handleManualPress}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="edit-2" size={14} color={C.textMuted} />
+            <Text style={styles.manualBtnText}>MANUAL</Text>
+          </TouchableOpacity>
         )}
 
         {/* Mode toggles — absolute top-right, always above camera feed */}
@@ -1160,6 +1193,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     backgroundColor: C.bg,
+  },
+  manualBtn: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.50)',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  manualBtnText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: C.textMuted,
   },
   modeToggles: {
     position: 'absolute',

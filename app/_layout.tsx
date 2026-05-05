@@ -59,6 +59,10 @@ function RootNavigator() {
         name="edit-profile"
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
+      <Stack.Screen
+        name="camera-scrubber"
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
     </Stack>
   );
 }
