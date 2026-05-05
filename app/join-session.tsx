@@ -89,7 +89,7 @@ export default function JoinSessionScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={{ flex: 1, backgroundColor: C.bg }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={[styles.root, { paddingTop: insets.top }]}>

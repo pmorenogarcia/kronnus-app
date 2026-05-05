@@ -5,7 +5,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -568,57 +570,62 @@ export default function SessionSetupScreen() {
 
       {/* Add Competitor Modal */}
       <Modal visible={showAddModal} transparent animationType="slide" onRequestClose={closeModal}>
-        <Pressable style={styles.modalOverlay} onPress={closeModal} />
-        <View style={[styles.addSheet, { paddingBottom: insets.bottom + 16 }]}>
-          <View style={styles.sheetHandle} />
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>ADD COMPETITOR</Text>
-            <TouchableOpacity onPress={closeModal} hitSlop={12}>
-              <Feather name="x" size={18} color={C.textMuted} />
-            </TouchableOpacity>
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.modalOverlay} onPress={closeModal} />
+          <View style={[styles.addSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>ADD COMPETITOR</Text>
+              <TouchableOpacity onPress={closeModal} hitSlop={12}>
+                <Feather name="x" size={18} color={C.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.sheetBody}>
+              <TextInput
+                style={styles.sheetInput}
+                value={newCompName}
+                onChangeText={setNewCompName}
+                placeholder="Display name *"
+                placeholderTextColor={C.textSecondary}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+              <TextInput
+                style={styles.sheetInput}
+                value={newCompBib}
+                onChangeText={setNewCompBib}
+                placeholder="Bib number (optional)"
+                placeholderTextColor={C.textSecondary}
+                keyboardType="number-pad"
+                returnKeyType="done"
+                onSubmitEditing={handleAddCompetitor}
+              />
+
+              {addCompError != null && <Text style={styles.sheetError}>{addCompError}</Text>}
+
+              <TouchableOpacity
+                style={[
+                  styles.addConfirmBtn,
+                  (!newCompName.trim() || addingComp) && styles.btnDisabled,
+                ]}
+                onPress={handleAddCompetitor}
+                disabled={!newCompName.trim() || addingComp}
+                activeOpacity={0.85}
+              >
+                {addingComp ? (
+                  <ActivityIndicator size="small" color="#0F0F0F" />
+                ) : (
+                  <Text style={styles.addConfirmBtnText}>ADD COMPETITOR</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <View style={styles.sheetBody}>
-            <TextInput
-              style={styles.sheetInput}
-              value={newCompName}
-              onChangeText={setNewCompName}
-              placeholder="Display name *"
-              placeholderTextColor={C.textSecondary}
-              autoFocus
-              autoCapitalize="words"
-              returnKeyType="next"
-            />
-            <TextInput
-              style={styles.sheetInput}
-              value={newCompBib}
-              onChangeText={setNewCompBib}
-              placeholder="Bib number (optional)"
-              placeholderTextColor={C.textSecondary}
-              keyboardType="number-pad"
-              returnKeyType="done"
-              onSubmitEditing={handleAddCompetitor}
-            />
-
-            {addCompError != null && <Text style={styles.sheetError}>{addCompError}</Text>}
-
-            <TouchableOpacity
-              style={[
-                styles.addConfirmBtn,
-                (!newCompName.trim() || addingComp) && styles.btnDisabled,
-              ]}
-              onPress={handleAddCompetitor}
-              disabled={!newCompName.trim() || addingComp}
-              activeOpacity={0.85}
-            >
-              {addingComp ? (
-                <ActivityIndicator size="small" color="#0F0F0F" />
-              ) : (
-                <Text style={styles.addConfirmBtnText}>ADD COMPETITOR</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1043,6 +1050,7 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.4 },
 
   // Add Competitor modal
+  modalKeyboardView: { flex: 1 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' },
   addSheet: {
     backgroundColor: '#1A1819',
