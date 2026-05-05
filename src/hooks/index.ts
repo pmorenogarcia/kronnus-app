@@ -1,3 +1,5 @@
+export { useCameraPermission } from './useCameraPermission';
+export type { UseCameraPermissionReturn } from './useCameraPermission';
 export { useSettings } from './useSettings';
 export type { AppSettings } from './useSettings';
 export { useSessionWebSocket } from './useSessionWebSocket';

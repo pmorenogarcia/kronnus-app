@@ -108,7 +108,7 @@ export default function WaitingRoomScreen() {
     router.replace({
       pathname: '/(tabs)/timing' as any,
       params: {
-        role: role ?? 'SPLIT',
+        role: assignedRole ?? role ?? 'SPLIT',
         session_code: session_code ?? '',
         session_id: session_id ?? '',
         session_start_ms: String(getCorrectedTimestampRef.current()),
@@ -116,7 +116,7 @@ export default function WaitingRoomScreen() {
         is_coordinator: 'false',
       },
     });
-  }, [sessionStarted, role, session_code, session_id]);
+  }, [sessionStarted, assignedRole, role, session_code, session_id]);
 
   useEffect(() => {
     if (sessionEnded) {

@@ -82,18 +82,6 @@ interface QueuedCapture {
   capturedAtMs: number;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function getUserIdFromToken(token: string): string {
-  try {
-    const [, payload] = token.split('.');
-    const decoded = JSON.parse(atob(payload)) as { sub?: string };
-    return decoded.sub ?? '';
-  } catch {
-    return '';
-  }
-}
-
 // ─── Timing Portal (shown when tab is accessed without an active session) ────
 
 type PortalPhase =
@@ -107,8 +95,6 @@ function TimingPortal() {
   const { token } = useAuth();
   const [phase, setPhase] = useState<PortalPhase>({ kind: 'loading' });
 
-  const userId = token ? getUserIdFromToken(token) : '';
-
   useFocusEffect(
     useCallback(() => {
       if (!token) return;
@@ -121,14 +107,13 @@ function TimingPortal() {
 
           const active = list.find((s) => s.status === 'ACTIVE');
           if (active) {
-            const isCoordinator = active.created_by === userId;
             router.replace({
               pathname: '/(tabs)/timing' as never,
               params: {
                 session_id: active.id,
                 session_code: active.session_code,
                 session_name: active.name,
-                is_coordinator: isCoordinator ? 'true' : 'false',
+                is_coordinator: 'true',
                 offset_ms: '0',
               },
             });
@@ -137,22 +122,7 @@ function TimingPortal() {
 
           const waiting = list.find((s) => s.status === 'WAITING');
           if (waiting) {
-            if (waiting.created_by === userId) {
-              setPhase({ kind: 'waiting_coord', session: waiting });
-              return;
-            }
-            try {
-              const state = await getSessionState(token!, waiting.session_code);
-              if (cancelled) return;
-              const myCheckpoint = state.checkpoints.find((cp) => cp.user_id === userId);
-              setPhase({
-                kind: 'waiting_op',
-                session: waiting,
-                role: myCheckpoint?.role ?? 'START',
-              });
-            } catch {
-              setPhase({ kind: 'waiting_coord', session: waiting });
-            }
+            setPhase({ kind: 'waiting_coord', session: waiting });
             return;
           }
 
@@ -166,7 +136,7 @@ function TimingPortal() {
       return () => {
         cancelled = true;
       };
-    }, [token, userId]),
+    }, [token]),
   );
 
   const P = portalStyles;
