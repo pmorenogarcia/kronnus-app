@@ -57,10 +57,11 @@ export function captureTimestamp(
   token: string,
   sessionCode: string,
   capturedAtMs: number,
+  triggerType: 'BUTTON' | 'CAMERA' = 'BUTTON',
 ): Promise<Timestamp> {
   return apiRequest<Timestamp>('POST', `/api/v1/sessions/${sessionCode}/timestamps`, token, {
     captured_at_ms: capturedAtMs,
-    trigger_type: 'BUTTON',
+    trigger_type: triggerType,
   });
 }
 
