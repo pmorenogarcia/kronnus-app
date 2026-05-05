@@ -1,3 +1,5 @@
+export { useSettings } from './useSettings';
+export type { AppSettings } from './useSettings';
 export { useSessionWebSocket } from './useSessionWebSocket';
 export type { RemoteDevice } from './useSessionWebSocket';
 export { useSessionSocket } from './useSessionSocket';

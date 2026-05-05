@@ -1,3 +1,4 @@
+export { RegistrationError, registerUser, UpdateProfileError, updateMe } from './auth';
 export {
   AuthError,
   loginUser,

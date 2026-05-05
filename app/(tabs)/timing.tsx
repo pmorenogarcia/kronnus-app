@@ -20,7 +20,7 @@ import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/ti
 import type { Timestamp } from '@/src/api/timestamps';
 import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
-import { useSessionSocket } from '@/src/hooks';
+import { useSessionSocket, useSettings } from '@/src/hooks';
 
 // ─── Design tokens (Paper) ────────────────────────────────────────────────────
 
@@ -365,6 +365,8 @@ function TimingContent() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
 
+  const [validating, setValidating] = useState(true);
+
   const {
     session_code,
     session_name,
@@ -384,6 +386,35 @@ function TimingContent() {
     is_coordinator?: string;
     role?: string;
   }>();
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!token || !session_id) {
+        setValidating(false);
+        return;
+      }
+      let cancelled = false;
+      setValidating(true);
+      listSessions(token)
+        .then((list) => {
+          if (cancelled) return;
+          const isActive = list.some((s) => s.id === session_id && s.status === 'ACTIVE');
+          if (!isActive) {
+            router.replace('/(tabs)/timing' as never);
+          } else {
+            setValidating(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) setValidating(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [token, session_id]),
+  );
+
+  const { settings } = useSettings();
 
   const isCoordinator = is_coordinator === 'true';
 
@@ -556,7 +587,7 @@ function TimingContent() {
     // Critical path — capture timestamp BEFORE any async work
     const capturedAtMs = getCorrectedTimestamp();
 
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (settings.soundEffects) await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 1, duration: 55, useNativeDriver: true }),
@@ -636,6 +667,15 @@ function TimingContent() {
     : null;
 
   // ─── Render ───────────────────────────────────────────────────────────────
+
+  if (validating) {
+    return (
+      <View style={[styles.root, styles.validatingWrap]}>
+        <Tabs.Screen options={{ headerShown: false }} />
+        <ActivityIndicator color={C.accent} size="small" />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -893,6 +933,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
+  },
+  validatingWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // ── Top bar ──

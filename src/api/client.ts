@@ -102,8 +102,8 @@ export async function getMe(token: string): Promise<User> {
     throw new AuthError('Failed to fetch user profile.', response.status);
   }
 
-  const data = (await response.json()) as { user_id: string; email: string };
-  return { id: data.user_id, email: data.email };
+  const data = (await response.json()) as { user_id: string; email: string; username?: string };
+  return { id: data.user_id, email: data.email, username: data.username };
 }
 
 export async function getStoredToken(): Promise<string | null> {

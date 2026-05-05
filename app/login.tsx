@@ -174,7 +174,11 @@ export default function LoginScreen() {
             <View style={styles.dividerLine} />
           </View>
 
-          <TouchableOpacity style={styles.registerBtn} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.registerBtn}
+            onPress={() => router.push('/register')}
+            activeOpacity={0.7}
+          >
             <Text style={styles.registerText}>{"DON'T HAVE AN ACCOUNT?"}</Text>
             <Text style={styles.registerAccent}> REGISTER HERE</Text>
           </TouchableOpacity>
