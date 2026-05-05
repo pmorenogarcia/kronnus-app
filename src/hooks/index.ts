@@ -8,3 +8,12 @@ export { useSessionSocket } from './useSessionSocket';
 export type { SocketStatus, UseSessionSocketReturn } from './useSessionSocket';
 export { useTimeSync } from './useTimeSync';
 export type { UseTimeSyncReturn } from './useTimeSync';
+export {
+  useCameraMotionDetector,
+  computeAverageLuminance,
+  isMotionDetected,
+} from './useCameraMotionDetector';
+export type {
+  UseCameraMotionDetectorOptions,
+  UseCameraMotionDetectorReturn,
+} from './useCameraMotionDetector';
