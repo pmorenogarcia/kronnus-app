@@ -20,7 +20,7 @@ import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/ti
 import type { Timestamp } from '@/src/api/timestamps';
 import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
-import { useSessionSocket } from '@/src/hooks';
+import { useSessionSocket, useSettings } from '@/src/hooks';
 
 // ─── Design tokens (Paper) ────────────────────────────────────────────────────
 
@@ -414,6 +414,8 @@ function TimingContent() {
     }, [token, session_id]),
   );
 
+  const { settings } = useSettings();
+
   const isCoordinator = is_coordinator === 'true';
 
   const code = session_code ?? '';
@@ -585,7 +587,7 @@ function TimingContent() {
     // Critical path — capture timestamp BEFORE any async work
     const capturedAtMs = getCorrectedTimestamp();
 
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    if (settings.soundEffects) await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 1, duration: 55, useNativeDriver: true }),

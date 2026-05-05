@@ -13,10 +13,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { deleteSession, getMe, listSessions, SessionError } from '@/src/api';
+import { deleteSession, listSessions, SessionError } from '@/src/api';
 import type { Session, SessionStatus } from '@/src/api';
 import { SessionStatusBadge } from '@/src/components';
-import type { User } from '@/types';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -86,7 +85,7 @@ interface DeleteState {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { draftCreated, draftName } = useLocalSearchParams<{
     draftCreated?: string;
     draftName?: string;
@@ -96,19 +95,10 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
 
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastShown = useRef(false);
-
-  // Fetch user info once
-  useEffect(() => {
-    if (!token) return;
-    getMe(token)
-      .then(setUser)
-      .catch(() => {});
-  }, [token]);
 
   // Session fetch (shared by focus effect + pull-to-refresh)
   const fetchSessions = useCallback(
@@ -210,8 +200,9 @@ export default function HomeScreen() {
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
-  const displayName = user?.email ? user.email.split('@')[0].toUpperCase() : '—';
-  const initials = user?.email ? user.email[0].toUpperCase() : '?';
+  const displayName =
+    user?.username?.toUpperCase() ?? (user?.email ? user.email.split('@')[0].toUpperCase() : '—');
+  const initials = (user?.username?.[0] ?? user?.email?.[0] ?? '?').toUpperCase();
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 

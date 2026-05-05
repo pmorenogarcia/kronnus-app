@@ -1,4 +1,4 @@
-export { RegistrationError, registerUser } from './auth';
+export { RegistrationError, registerUser, UpdateProfileError, updateMe } from './auth';
 export {
   AuthError,
   loginUser,
