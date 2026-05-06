@@ -113,7 +113,11 @@ export function useCameraMotionDetector(
 
       let base64: string | undefined;
       try {
-        const picture = await ref.current.takePictureAsync({ base64: true, quality: 0.1 });
+        const picture = await ref.current.takePictureAsync({
+          base64: true,
+          quality: 0.1,
+          shutterSound: false,
+        });
         base64 = picture.base64;
       } catch {
         return;
