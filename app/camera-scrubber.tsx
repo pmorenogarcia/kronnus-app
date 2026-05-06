@@ -1,13 +1,13 @@
 /**
- * Camera scrubber — manual fallback for operators when automatic motion
- * detection is unreliable (e.g. poor or uneven lighting).
+ * Camera scrubber — manual timestamp via burst recording.
  *
- * Precision trade-off: frame-rate-limited detection has a ~33–67ms uncertainty
- * window (one 15-fps poll interval). The scrubber lets the operator capture a
- * still frame to establish a reference point and then shift the recorded
- * timestamp within ±500ms using the slider. This is less accurate than a
- * well-lit automatic trigger but more accurate than relying on a degraded
- * automatic trigger.
+ * ready → recording → scrub → confirm → back
+ *
+ * Operator presses START: frames are captured at ~15fps (shutterSound and
+ * animateShutter both disabled). Each frame stores its URI and the exact
+ * Date.now() at capture time. After STOP, the operator scrubs through frames
+ * to pick the exact crossing moment. The confirmed timestamp is the stored
+ * Date.now() for that frame, corrected by the NTP offset.
  *
  * NOTE: @react-native-community/slider is a native module — EAS Build is
  * required. This screen will not work in Expo Go.
@@ -15,15 +15,16 @@
 
 import { Feather } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
+import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
 import { captureTimestamp } from '@/src/api/timestamps';
-import { applyManualOffset, formatElapsedMs, formatOffsetLabel } from '@/src/utils';
+import { formatElapsedMs } from '@/src/utils';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -31,12 +32,26 @@ const C = {
   bg: '#131313',
   bgCard: '#1A1819',
   accent: '#EDD83D',
-  accentBg: '#EDD83D14',
   border: '#2A2728',
   textPrimary: '#E2DADB',
   textSecondary: '#6D696A',
   textMuted: '#A2A7A5',
+  danger: '#E05252',
 };
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const CAPTURE_INTERVAL_MS = 67; // ~15 fps — matches motion detector poll rate
+const MAX_FRAMES = 225; // 15-second cap at 15fps
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type Phase = 'ready' | 'recording' | 'scrub';
+
+interface CapturedFrame {
+  uri: string;
+  timestamp: number; // Date.now() at moment of capture
+}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -54,125 +69,171 @@ export default function CameraScrubberScreen() {
   const sessionStartMs = Number(session_start_ms ?? 0);
 
   const cameraRef = useRef<CameraView>(null);
+  const framesRef = useRef<CapturedFrame[]>([]);
+  const captureActiveRef = useRef(false); // prevents overlapping takePictureAsync calls
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Phase: 'capture' shows the viewfinder; 'adjust' shows the slider UI
-  const [phase, setPhase] = useState<'capture' | 'adjust'>('capture');
-  const [capturedAtMs, setCapturedAtMs] = useState<number | null>(null);
-  const [sliderOffset, setSliderOffset] = useState(0);
-  const [capturing, setCapturing] = useState(false);
+  const [phase, setPhase] = useState<Phase>('ready');
+  const [frameCount, setFrameCount] = useState(0);
+  const [frames, setFrames] = useState<CapturedFrame[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleCapture() {
-    if (!cameraRef.current || capturing) return;
-    setCapturing(true);
-    // Record the timestamp synchronously before the async IO
-    const now = Date.now();
-    try {
-      await cameraRef.current.takePictureAsync({ base64: false, quality: 0.1 });
-    } catch {
-      // ignore — photo is only used to force a shutter moment; the timestamp is what matters
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current !== null) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  function startRecording() {
+    framesRef.current = [];
+    captureActiveRef.current = false;
+    setFrameCount(0);
+    setPhase('recording');
+
+    intervalRef.current = setInterval(async () => {
+      if (captureActiveRef.current || !cameraRef.current) return;
+      if (framesRef.current.length >= MAX_FRAMES) {
+        finishRecording();
+        return;
+      }
+
+      captureActiveRef.current = true;
+      const timestamp = Date.now();
+      try {
+        const pic = await cameraRef.current.takePictureAsync({
+          base64: false,
+          quality: 0.3,
+          shutterSound: false,
+        });
+        framesRef.current.push({ uri: pic.uri, timestamp });
+        setFrameCount(framesRef.current.length);
+      } catch {
+        // frame lost — continue
+      } finally {
+        captureActiveRef.current = false;
+      }
+    }, CAPTURE_INTERVAL_MS);
+  }
+
+  function finishRecording() {
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-    setCapturedAtMs(now);
-    setPhase('adjust');
-    setCapturing(false);
+    const captured = [...framesRef.current];
+    if (captured.length === 0) {
+      setPhase('ready');
+      return;
+    }
+    setFrames(captured);
+    setSelectedIndex(0);
+    setPhase('scrub');
+  }
+
+  function handleClose() {
+    if (intervalRef.current !== null) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    router.back();
   }
 
   async function handleConfirm() {
-    if (capturedAtMs === null || !token || submitting) return;
+    if (frames.length === 0 || !token || submitting) return;
     setSubmitting(true);
 
-    const adjustedMs = applyManualOffset(capturedAtMs, sliderOffset);
-    const correctedMs = applyManualOffset(adjustedMs, ntpOffsetMs);
+    const correctedMs = frames[selectedIndex].timestamp + ntpOffsetMs;
 
     try {
       await captureTimestamp(token, session_code, correctedMs, 'CAMERA');
     } catch {
-      // best-effort — the caller (timing screen) owns the offline queue;
-      // the scrubber is a manual override path with the operator present
+      // best-effort; timing screen owns the offline queue
     } finally {
       setSubmitting(false);
       router.back();
     }
   }
 
-  const adjustedElapsedMs =
-    capturedAtMs !== null ? applyManualOffset(capturedAtMs, sliderOffset) - sessionStartMs : 0;
+  const selectedFrame = frames[selectedIndex];
+  const elapsedMs = selectedFrame ? Math.max(0, selectedFrame.timestamp - sessionStartMs) : 0;
+
+  const headerTitle =
+    phase === 'ready'
+      ? 'MANUAL CAPTURE'
+      : phase === 'recording'
+        ? `RECORDING · ${frameCount}`
+        : 'SELECT FRAME';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => router.back()}
+          style={styles.headerBtn}
+          onPress={handleClose}
           activeOpacity={0.7}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Feather name="x" size={20} color={C.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>MANUAL CAPTURE</Text>
-        <View style={styles.backBtn} />
+        <Text style={styles.headerTitle}>{headerTitle}</Text>
+        {phase === 'scrub' ? (
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => setPhase('ready')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="refresh-cw" size={16} color={C.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.headerBtn} />
+        )}
       </View>
 
       {/* ── Body ── */}
-      {phase === 'capture' ? (
-        <View style={styles.capturePhase}>
-          {/* Viewfinder */}
-          <View style={styles.viewfinderWrap}>
-            <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back" />
-            <View style={styles.viewfinderOverlay}>
-              <Text style={styles.viewfinderHint}>Frame the finish line, then tap CAPTURE</Text>
+      {phase === 'scrub' ? (
+        <View style={styles.scrubPhase}>
+          {/* Frame viewer */}
+          <View style={styles.frameWrap}>
+            {selectedFrame && (
+              <Image
+                source={{ uri: selectedFrame.uri }}
+                style={StyleSheet.absoluteFillObject}
+                contentFit="contain"
+              />
+            )}
+            <View style={styles.frameBadge}>
+              <Text style={styles.frameBadgeText}>
+                {selectedIndex + 1} / {frames.length}
+              </Text>
             </View>
           </View>
 
-          {/* Capture button */}
-          <TouchableOpacity
-            style={[styles.captureBtn, capturing && styles.captureBtnDisabled]}
-            onPress={handleCapture}
-            activeOpacity={0.8}
-            disabled={capturing}
-          >
-            {capturing ? (
-              <ActivityIndicator color="#0F0F0F" size="small" />
-            ) : (
-              <>
-                <Feather name="camera" size={16} color="#0F0F0F" />
-                <Text style={styles.captureBtnText}>CAPTURE</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View style={styles.adjustPhase}>
-          {/* Elapsed time display */}
+          {/* Timestamp for selected frame */}
           <View style={styles.timeCard}>
-            <Text style={styles.timeLabel}>ADJUSTED TIME</Text>
-            <Text style={styles.timeValue}>{formatElapsedMs(Math.max(0, adjustedElapsedMs))}</Text>
-            <Text style={styles.offsetLabel}>{formatOffsetLabel(sliderOffset)}</Text>
+            <Text style={styles.timeLabel}>FRAME TIME</Text>
+            <Text style={styles.timeValue}>{formatElapsedMs(elapsedMs)}</Text>
           </View>
 
-          {/* Slider */}
-          <View style={styles.sliderSection}>
-            <Text style={styles.sliderBoundLabel}>−500ms</Text>
-            <Slider
-              style={styles.slider}
-              minimumValue={-500}
-              maximumValue={500}
-              step={10}
-              value={sliderOffset}
-              onValueChange={(v) => setSliderOffset(v)}
-              minimumTrackTintColor={C.accent}
-              maximumTrackTintColor={C.border}
-              thumbTintColor={C.accent}
-            />
-            <Text style={styles.sliderBoundLabel}>+500ms</Text>
-          </View>
-
+          {/* Frame scrubber */}
+          <Slider
+            style={styles.slider}
+            minimumValue={0}
+            maximumValue={Math.max(0, frames.length - 1)}
+            step={1}
+            value={selectedIndex}
+            onValueChange={(v) => setSelectedIndex(Math.round(v))}
+            minimumTrackTintColor={C.accent}
+            maximumTrackTintColor={C.border}
+            thumbTintColor={C.accent}
+          />
           <Text style={styles.sliderHint}>
-            Slide to correct for reaction time or detection delay
+            Drag to find the exact frame where the rider crossed the line
           </Text>
 
-          {/* Confirm button */}
+          {/* Confirm */}
           <TouchableOpacity
             style={[styles.confirmBtn, submitting && styles.confirmBtnDisabled]}
             onPress={handleConfirm}
@@ -189,6 +250,43 @@ export default function CameraScrubberScreen() {
             )}
           </TouchableOpacity>
         </View>
+      ) : (
+        <View style={styles.recordPhase}>
+          {/* Viewfinder — always mounted during ready/recording */}
+          <View style={styles.viewfinderWrap}>
+            <CameraView
+              ref={cameraRef}
+              style={StyleSheet.absoluteFillObject}
+              facing="back"
+              animateShutter={false}
+            />
+
+            {phase === 'ready' && (
+              <View style={styles.viewfinderOverlay}>
+                <Text style={styles.viewfinderHint}>Frame the finish line, then tap START</Text>
+              </View>
+            )}
+
+            {phase === 'recording' && (
+              <View style={styles.recordingBadge}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingText}>REC</Text>
+              </View>
+            )}
+          </View>
+
+          {phase === 'ready' ? (
+            <TouchableOpacity style={styles.startBtn} onPress={startRecording} activeOpacity={0.8}>
+              <View style={styles.startDot} />
+              <Text style={styles.startBtnText}>START RECORDING</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.stopBtn} onPress={finishRecording} activeOpacity={0.8}>
+              <View style={styles.stopSquare} />
+              <Text style={styles.stopBtnText}>STOP</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     </View>
   );
@@ -201,6 +299,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.bg,
   },
+
+  // ── Header ──────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -210,7 +310,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.border,
   },
-  backBtn: {
+  headerBtn: {
     width: 36,
     height: 36,
     alignItems: 'center',
@@ -223,9 +323,8 @@ const styles = StyleSheet.create({
     color: C.textPrimary,
   },
 
-  // ── Capture phase ──────────────────────────────────────────────────────────
-
-  capturePhase: {
+  // ── Ready / Recording phase ──────────────────────────────────────────────────
+  recordPhase: {
     flex: 1,
     gap: 20,
     paddingHorizontal: 20,
@@ -246,51 +345,117 @@ const styles = StyleSheet.create({
   viewfinderHint: {
     fontFamily: 'Barlow-Regular',
     fontSize: 12,
-    color: 'rgba(255,255,255,0.65)',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    color: 'rgba(255,255,255,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
     overflow: 'hidden',
   },
-  captureBtn: {
+  recordingBadge: {
+    position: 'absolute',
+    top: 14,
+    left: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.danger,
+  },
+  recordingText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 12,
+    letterSpacing: 2,
+    color: C.danger,
+  },
+  startBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 10,
     backgroundColor: C.accent,
     borderRadius: 12,
     paddingVertical: 14,
   },
-  captureBtnDisabled: {
-    opacity: 0.6,
+  startDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#0F0F0F',
   },
-  captureBtnText: {
+  startBtnText: {
     fontFamily: 'BarlowCondensed-Bold',
     fontSize: 15,
     letterSpacing: 2,
     color: '#0F0F0F',
   },
-
-  // ── Adjust phase ───────────────────────────────────────────────────────────
-
-  adjustPhase: {
-    flex: 1,
+  stopBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
-    paddingHorizontal: 28,
+    gap: 10,
+    backgroundColor: C.danger,
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+  stopSquare: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+    backgroundColor: '#fff',
+  },
+  stopBtnText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 15,
+    letterSpacing: 2,
+    color: '#fff',
+  },
+
+  // ── Scrub phase ──────────────────────────────────────────────────────────────
+  scrubPhase: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 16,
+  },
+  frameWrap: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+  frameBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  frameBadgeText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 12,
+    letterSpacing: 1,
+    color: C.textMuted,
   },
   timeCard: {
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     backgroundColor: C.bgCard,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: C.border,
-    paddingHorizontal: 32,
-    paddingVertical: 20,
-    width: '100%',
+    paddingVertical: 14,
+    paddingHorizontal: 20,
   },
   timeLabel: {
     fontFamily: 'BarlowCondensed-Bold',
@@ -300,31 +465,11 @@ const styles = StyleSheet.create({
   },
   timeValue: {
     fontFamily: 'SpaceMono-Regular',
-    fontSize: 32,
+    fontSize: 28,
     color: C.textPrimary,
   },
-  offsetLabel: {
-    fontFamily: 'BarlowCondensed-Bold',
-    fontSize: 13,
-    letterSpacing: 1,
-    color: C.accent,
-    marginTop: 2,
-  },
-  sliderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: '100%',
-  },
-  sliderBoundLabel: {
-    fontFamily: 'Barlow-Regular',
-    fontSize: 11,
-    color: C.textMuted,
-    minWidth: 42,
-    textAlign: 'center',
-  },
   slider: {
-    flex: 1,
+    width: '100%',
     height: 36,
   },
   sliderHint: {
@@ -332,7 +477,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: C.textSecondary,
     textAlign: 'center',
-    lineHeight: 18,
   },
   confirmBtn: {
     flexDirection: 'row',
@@ -342,7 +486,6 @@ const styles = StyleSheet.create({
     backgroundColor: C.accent,
     borderRadius: 12,
     paddingVertical: 14,
-    width: '100%',
   },
   confirmBtnDisabled: {
     opacity: 0.6,

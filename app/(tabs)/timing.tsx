@@ -790,7 +790,12 @@ function TimingContent() {
       <View style={styles.timerZone}>
         {/* Live camera feed — only mounted in camera mode to conserve battery and heat */}
         {triggerMode === 'camera' && (
-          <CameraView ref={cameraRef} style={StyleSheet.absoluteFillObject} facing="back" />
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFillObject}
+            facing="back"
+            animateShutter={false}
+          />
         )}
 
         {/* Manual scrubber — absolute top-left, only visible in camera mode */}
