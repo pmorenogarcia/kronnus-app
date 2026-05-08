@@ -1,6 +1,5 @@
-import * as SecureStore from 'expo-secure-store';
-
 import type { User } from '@/types';
+import { setItem } from '@/src/utils/storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const AUTH_TOKEN_KEY = 'auth_token';
@@ -58,7 +57,7 @@ export async function registerUser(
   }
 
   const data = (await response.json()) as { token: string };
-  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, data.token);
+  await setItem(AUTH_TOKEN_KEY, data.token);
   return { token: data.token };
 }
 

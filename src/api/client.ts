@@ -1,6 +1,5 @@
-import * as SecureStore from 'expo-secure-store';
-
 import { User } from '@/types';
+import { deleteItem, getItem, setItem } from '@/src/utils/storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const AUTH_TOKEN_KEY = 'auth_token';
@@ -84,7 +83,7 @@ export async function loginUser(identifier: string, password: string): Promise<{
   }
 
   const data = (await response.json()) as { token: string };
-  await SecureStore.setItemAsync(AUTH_TOKEN_KEY, data.token);
+  await setItem(AUTH_TOKEN_KEY, data.token);
   return { token: data.token };
 }
 
@@ -107,11 +106,11 @@ export async function getMe(token: string): Promise<User> {
 }
 
 export async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(AUTH_TOKEN_KEY);
+  return getItem(AUTH_TOKEN_KEY);
 }
 
 export async function clearStoredToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(AUTH_TOKEN_KEY);
+  await deleteItem(AUTH_TOKEN_KEY);
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────

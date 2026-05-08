@@ -1,5 +1,5 @@
-import * as SecureStore from 'expo-secure-store';
 import { useEffect, useState } from 'react';
+import { getItem, setItem } from '@/src/utils/storage';
 
 const SETTINGS_KEY = 'kronnus_settings';
 
@@ -18,7 +18,7 @@ export function useSettings() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    SecureStore.getItemAsync(SETTINGS_KEY)
+    getItem(SETTINGS_KEY)
       .then((raw) => {
         if (raw) {
           try {
@@ -35,7 +35,7 @@ export function useSettings() {
     const next = { ...settings, [key]: value };
     setSettings(next);
     try {
-      await SecureStore.setItemAsync(SETTINGS_KEY, JSON.stringify(next));
+      await setItem(SETTINGS_KEY, JSON.stringify(next));
     } catch {
       // best-effort persistence
     }
