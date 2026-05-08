@@ -125,16 +125,6 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
-
-        {/* ── Edit CTA ── */}
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => router.push('/edit-profile' as never)}
-          activeOpacity={0.8}
-        >
-          <Feather name="edit-2" size={15} color="#0F0F0F" />
-          <Text style={styles.editBtnText}>EDIT PROFILE</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -284,23 +274,5 @@ const styles = StyleSheet.create({
     fontFamily: 'Barlow-SemiBold',
     fontSize: 15,
     color: C.textPrimary,
-  },
-
-  // Edit CTA button
-  editBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: C.accent,
-    borderRadius: 14,
-    height: 54,
-    marginTop: 8,
-  },
-  editBtnText: {
-    fontFamily: 'BarlowCondensed-Black',
-    fontSize: 16,
-    letterSpacing: 1.5,
-    color: '#0F0F0F',
   },
 });

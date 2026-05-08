@@ -3,6 +3,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
   Modal,
   RefreshControl,
   ScrollView,
@@ -202,9 +203,7 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.logoRow}>
-          <View style={styles.logoIconWrapper}>
-            <Feather name="clock" size={20} color="#0F0F0F" />
-          </View>
+          <Image source={require('../../assets/images/icon.png')} style={styles.logoIcon} />
           <View>
             <Text style={styles.logoName}>KRONNUS</Text>
             <Text style={styles.logoTagline}>JUST IN TIME</Text>
@@ -557,13 +556,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logoIconWrapper: {
+  logoIcon: {
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: C.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   logoName: {
     fontFamily: 'BarlowCondensed-Black',
