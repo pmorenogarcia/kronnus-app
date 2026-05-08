@@ -106,7 +106,7 @@ export default function JoinSessionScreen() {
             <Text style={styles.headerTitle}>JOIN SESSION</Text>
             <Text style={styles.headerSub}>KRONNUS</Text>
           </View>
-          <View style={styles.backBtn} />
+          <View style={{ width: 38 }} />
         </View>
 
         <ScrollView

@@ -160,7 +160,7 @@ export default function WaitingRoomScreen() {
           <Text style={styles.headerTitle}>WAITING ROOM</Text>
           <Text style={styles.headerSub}>KRONNUS</Text>
         </View>
-        <View style={styles.backBtn} />
+        <View style={{ width: 38 }} />
       </View>
 
       {/* Connection banner */}

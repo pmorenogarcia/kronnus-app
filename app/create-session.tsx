@@ -359,7 +359,7 @@ export default function CreateSessionScreen() {
           <Text style={styles.headerTitle}>NEW SESSION</Text>
           <Text style={styles.headerSub}>KRONNUS</Text>
         </View>
-        <View style={styles.backBtn} />
+        <View style={{ width: 38 }} />
       </View>
 
       <ScrollView

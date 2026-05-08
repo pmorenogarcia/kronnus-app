@@ -36,7 +36,7 @@ export default function ContactScreen() {
           <Text style={styles.headerTitle}>CONTACT</Text>
           <Text style={styles.headerSub}>KRONNUS</Text>
         </View>
-        <View style={styles.backBtn} />
+        <View style={{ width: 38 }} />
       </View>
 
       {/* Body */}

@@ -789,7 +789,7 @@ function TimingContent() {
               <Text style={styles.finishText}>FINISH</Text>
             </TouchableOpacity>
           ))}
-        {!isCoordinator && <View style={styles.backBtn} />}
+        {!isCoordinator && <View style={{ width: 38 }} />}
       </View>
 
       {/* ── Timer zone ── */}
