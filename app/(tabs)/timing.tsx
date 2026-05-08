@@ -23,7 +23,7 @@ import type { Timestamp } from '@/src/api/timestamps';
 import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
-import { useCameraMotionDetector, useSessionSocket, useSettings } from '@/src/hooks';
+import { useSessionSocket, useSettings } from '@/src/hooks';
 
 // ─── Design tokens (Paper) ────────────────────────────────────────────────────
 
@@ -643,41 +643,13 @@ function TimingContent() {
 
   const [triggerMode, setTriggerMode] = useState<'button' | 'camera'>('button');
   const [showPermissionGate, setShowPermissionGate] = useState(false);
-  const [scrubberOpen, setScrubberOpen] = useState(false);
-  const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
   const permissionSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const cameraRef = useRef<CameraView>(null);
 
   const [cameraPermission] = useCameraPermissions();
   const cameraGranted = cameraPermission?.granted ?? false;
 
-  async function handleCameraCapture(rawMs: number) {
-    // rawMs is Date.now() from the motion detector — server applies NTP offset.
-    const displayMs = rawMs + offsetMs; // NTP-corrected, for modal display only
-
-    Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 1, duration: 55, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 0, duration: 320, useNativeDriver: true }),
-    ]).start();
-
-    if (!token) return;
-
-    try {
-      const ts = await captureTimestamp(token, code, rawMs, 'CAMERA');
-      openModal({ timestamp: ts, capturedAtMs: displayMs });
-    } catch {
-      setQueue((prev) => [...prev, { capturedAtMs: rawMs, displayMs, triggerType: 'CAMERA' }]);
-    }
-  }
-
-  const { ref: cameraRef, isArmed } = useCameraMotionDetector({
-    enabled: triggerMode === 'camera' && !scrubberOpen,
-    sensitivity,
-    cooldownMs: 2000,
-    onTrigger: handleCameraCapture,
-  });
-
   function handleManualPress() {
-    setScrubberOpen(true);
     router.push({
       pathname: '/camera-scrubber' as never,
       params: {
@@ -727,13 +699,6 @@ function TimingContent() {
       deactivateKeepAwake();
     };
   }, [triggerMode]);
-
-  // Re-arm detection when the scrubber modal closes and this screen regains focus
-  useFocusEffect(
-    useCallback(() => {
-      setScrubberOpen(false);
-    }, []),
-  );
 
   // ─── Derived ──────────────────────────────────────────────────────────────
 
@@ -802,19 +767,6 @@ function TimingContent() {
             facing="back"
             animateShutter={false}
           />
-        )}
-
-        {/* Manual scrubber — absolute top-left, only visible in camera mode */}
-        {triggerMode === 'camera' && (
-          <TouchableOpacity
-            style={styles.manualBtn}
-            onPress={handleManualPress}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Feather name="edit-2" size={14} color={C.textMuted} />
-            <Text style={styles.manualBtnText}>MANUAL</Text>
-          </TouchableOpacity>
         )}
 
         {/* Mode toggles — absolute top-right, always above camera feed */}
@@ -886,64 +838,56 @@ function TimingContent() {
             </Animated.View>
           </>
         ) : (
-          /* Camera mode overlay — centered content above the live feed */
-          <View style={styles.cameraOverlay}>
-            <Text style={styles.sessionName} numberOfLines={1}>
-              {sessionName.toUpperCase()}
-            </Text>
+          /* Camera mode — viewfinder overlay */
+          <>
+            {/* Corner brackets */}
+            <View style={styles.bracketTL} pointerEvents="none" />
+            <View style={styles.bracketTR} pointerEvents="none" />
+            <View style={styles.bracketBL} pointerEvents="none" />
+            <View style={styles.bracketBR} pointerEvents="none" />
 
-            {role ? (
-              <View style={styles.roleBadge}>
-                <Text style={styles.roleBadgeText}>{role}</Text>
-              </View>
-            ) : null}
-
-            {/* Timer in a semi-transparent pill */}
-            <View style={styles.cameraTimerPill}>
-              <Text style={styles.elapsedLabel}>ELAPSED TIME</Text>
-              <View style={styles.timerRow}>
-                <Text style={styles.timerHms}>{hms}</Text>
-                <Text style={styles.timerCs}>{cs}</Text>
+            {/* Crosshair reticle — centered */}
+            <View
+              style={[StyleSheet.absoluteFillObject, styles.crosshairContainer]}
+              pointerEvents="none"
+            >
+              <View style={styles.crosshairAnchor}>
+                <View style={styles.crosshairCircle} />
+                <View style={styles.crosshairV} />
+                <View style={styles.crosshairH} />
               </View>
             </View>
 
-            {/* Armed indicator — visible only after baseline warm-up completes */}
-            {isArmed && (
-              <View style={styles.armedIndicator}>
-                <View style={styles.armedDot} />
-                <Text style={styles.armedText}>ARMED</Text>
-              </View>
-            )}
-
-            {/* Three-segment sensitivity control */}
-            <View style={styles.sensitivityToggle}>
-              {(['low', 'medium', 'high'] as const).map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.sensitivityBtn, sensitivity === s && styles.sensitivityBtnActive]}
-                  onPress={() => setSensitivity(s)}
-                  activeOpacity={0.7}
-                >
-                  <Text
-                    style={[
-                      styles.sensitivityText,
-                      sensitivity === s && styles.sensitivityTextActive,
-                    ]}
-                  >
-                    {s.toUpperCase()}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Timer overlay — top-left */}
+            <View style={styles.cameraTimerOverlay} pointerEvents="none">
+              <Text style={styles.cameraElapsedLabel}>ELAPSED</Text>
+              <Text style={styles.cameraTimerHms}>{hms}</Text>
             </View>
 
             {/* Queue badge */}
             {queue.length > 0 && (
-              <View style={styles.queueBadge}>
-                <Feather name="clock" size={11} color={C.accent} />
-                <Text style={styles.queueBadgeText}>{queue.length} queued</Text>
+              <View style={styles.cameraQueueWrap}>
+                <View style={styles.queueBadge}>
+                  <Feather name="clock" size={11} color={C.accent} />
+                  <Text style={styles.queueBadgeText}>{queue.length} queued</Text>
+                </View>
               </View>
             )}
-          </View>
+
+            {/* Camera trigger button — bottom-center, opens scrubber */}
+            <View style={styles.cameraBtnWrap}>
+              <View style={styles.cameraBtnOuter}>
+                <View style={styles.cameraBtnAura} pointerEvents="none" />
+                <TouchableOpacity
+                  style={styles.cameraBtnCircle}
+                  onPress={handleManualPress}
+                  activeOpacity={0.85}
+                >
+                  <Feather name="camera" size={28} color="#0F0F0F" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </>
         )}
       </View>
 
@@ -1205,24 +1149,6 @@ const styles = StyleSheet.create({
     position: 'relative',
     backgroundColor: C.bg,
   },
-  manualBtn: {
-    position: 'absolute',
-    top: 20,
-    left: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.50)',
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-  },
-  manualBtnText: {
-    fontFamily: 'BarlowCondensed-Bold',
-    fontSize: 11,
-    letterSpacing: 1.5,
-    color: C.textMuted,
-  },
   modeToggles: {
     position: 'absolute',
     top: 20,
@@ -1246,66 +1172,150 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // ── Camera overlay ──
-  cameraOverlay: {
-    flex: 1,
-    width: '100%',
+  // ── Camera viewfinder overlay ──
+  bracketTL: {
+    position: 'absolute',
+    top: 32,
+    left: 32,
+    width: 36,
+    height: 36,
+    borderTopWidth: 2,
+    borderLeftWidth: 2,
+    borderTopColor: C.accent,
+    borderLeftColor: C.accent,
+    borderTopLeftRadius: 4,
+  },
+  bracketTR: {
+    position: 'absolute',
+    top: 32,
+    right: 32,
+    width: 36,
+    height: 36,
+    borderTopWidth: 2,
+    borderRightWidth: 2,
+    borderTopColor: C.accent,
+    borderRightColor: C.accent,
+    borderTopRightRadius: 4,
+  },
+  bracketBL: {
+    position: 'absolute',
+    bottom: 32,
+    left: 32,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 2,
+    borderLeftWidth: 2,
+    borderBottomColor: C.accent,
+    borderLeftColor: C.accent,
+    borderBottomLeftRadius: 4,
+  },
+  bracketBR: {
+    position: 'absolute',
+    bottom: 32,
+    right: 32,
+    width: 36,
+    height: 36,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderBottomColor: C.accent,
+    borderRightColor: C.accent,
+    borderBottomRightRadius: 4,
+  },
+  crosshairContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
   },
-  cameraTimerPill: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    paddingHorizontal: 28,
-    paddingVertical: 16,
-    gap: 4,
+  crosshairAnchor: {
+    width: 80,
+    height: 80,
   },
-  armedIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  armedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#52C97B',
-  },
-  armedText: {
-    fontFamily: 'BarlowCondensed-Bold',
-    fontSize: 12,
-    letterSpacing: 2,
-    color: '#52C97B',
-  },
-  sensitivityToggle: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderRadius: 10,
-    overflow: 'hidden',
+  crosshairCircle: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: '#EDD83D40',
   },
-  sensitivityBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 18,
+  crosshairV: {
+    position: 'absolute',
+    width: 1,
+    height: 48,
+    top: 16,
+    left: 40,
+    backgroundColor: '#EDD83D66',
   },
-  sensitivityBtnActive: {
+  crosshairH: {
+    position: 'absolute',
+    width: 48,
+    height: 1,
+    top: 40,
+    left: 16,
+    backgroundColor: '#EDD83D66',
+  },
+  cameraTimerOverlay: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    gap: 2,
+  },
+  cameraElapsedLabel: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 9,
+    letterSpacing: 1.44,
+    textTransform: 'uppercase',
+    color: '#EDD83D99',
+  },
+  cameraTimerHms: {
+    fontFamily: 'SpaceMono-Bold',
+    fontSize: 28,
+    letterSpacing: -0.28,
+    color: C.accent,
+    textShadowColor: '#EDD83D80',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  cameraQueueWrap: {
+    position: 'absolute',
+    bottom: 156,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  cameraBtnWrap: {
+    position: 'absolute',
+    bottom: 48,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  cameraBtnOuter: {
+    width: 100,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraBtnAura: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#EDD83D1A',
+  },
+  cameraBtnCircle: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     backgroundColor: C.accent,
-  },
-  sensitivityText: {
-    fontFamily: 'BarlowCondensed-Bold',
-    fontSize: 12,
-    letterSpacing: 1.5,
-    color: C.textMuted,
-  },
-  sensitivityTextActive: {
-    color: '#0F0F0F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: C.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 28,
+    elevation: 16,
   },
   sessionName: {
     fontFamily: 'BarlowCondensed-Bold',
