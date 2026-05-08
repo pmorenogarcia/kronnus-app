@@ -82,7 +82,8 @@ interface PendingCapture {
 }
 
 interface QueuedCapture {
-  capturedAtMs: number;
+  capturedAtMs: number; // raw — sent to API; server applies NTP offset
+  displayMs: number; // NTP-corrected — used only for modal display
   triggerType: 'BUTTON' | 'CAMERA';
 }
 
@@ -501,7 +502,7 @@ function TimingContent() {
     captureTimestamp(token, code, item.capturedAtMs, item.triggerType)
       .then((ts) => {
         setQueue((prev) => prev.slice(1));
-        openModal({ timestamp: ts, capturedAtMs: item.capturedAtMs });
+        openModal({ timestamp: ts, capturedAtMs: item.displayMs });
       })
       .catch(() => {
         /* leave item in queue, retry on next reconnect */
@@ -513,6 +514,7 @@ function TimingContent() {
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const flashAnim = useRef(new Animated.Value(0)).current;
+  const pressTimestampRef = useRef(0);
   const modalSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
@@ -552,6 +554,8 @@ function TimingContent() {
   // ─── Bolt button ──────────────────────────────────────────────────────────
 
   function handlePressIn() {
+    // Capture at touchStart — eliminates ~100ms press-duration bias vs onPress
+    pressTimestampRef.current = Date.now();
     Animated.spring(scaleAnim, {
       toValue: 0.92,
       useNativeDriver: true,
@@ -570,8 +574,9 @@ function TimingContent() {
   }
 
   async function handleCapture() {
-    // Critical path — capture timestamp BEFORE any async work
-    const capturedAtMs = getCorrectedTimestamp();
+    // Raw press time stamped in handlePressIn (touchStart). Server applies NTP offset.
+    const rawMs = pressTimestampRef.current || Date.now();
+    const displayMs = rawMs + offsetMs; // NTP-corrected, for modal display only
 
     if (settings.soundEffects) await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
@@ -583,10 +588,10 @@ function TimingContent() {
     if (!token) return;
 
     try {
-      const ts = await captureTimestamp(token, code, capturedAtMs);
-      openModal({ timestamp: ts, capturedAtMs });
+      const ts = await captureTimestamp(token, code, rawMs);
+      openModal({ timestamp: ts, capturedAtMs: displayMs });
     } catch {
-      setQueue((prev) => [...prev, { capturedAtMs, triggerType: 'BUTTON' }]);
+      setQueue((prev) => [...prev, { capturedAtMs: rawMs, displayMs, triggerType: 'BUTTON' }]);
     }
   }
 
@@ -645,8 +650,9 @@ function TimingContent() {
   const [cameraPermission] = useCameraPermissions();
   const cameraGranted = cameraPermission?.granted ?? false;
 
-  async function handleCameraCapture(capturedAtMs: number) {
-    const correctedAtMs = capturedAtMs + offsetMs;
+  async function handleCameraCapture(rawMs: number) {
+    // rawMs is Date.now() from the motion detector — server applies NTP offset.
+    const displayMs = rawMs + offsetMs; // NTP-corrected, for modal display only
 
     Animated.sequence([
       Animated.timing(flashAnim, { toValue: 1, duration: 55, useNativeDriver: true }),
@@ -656,10 +662,10 @@ function TimingContent() {
     if (!token) return;
 
     try {
-      const ts = await captureTimestamp(token, code, correctedAtMs, 'CAMERA');
-      openModal({ timestamp: ts, capturedAtMs: correctedAtMs });
+      const ts = await captureTimestamp(token, code, rawMs, 'CAMERA');
+      openModal({ timestamp: ts, capturedAtMs: displayMs });
     } catch {
-      setQueue((prev) => [...prev, { capturedAtMs: correctedAtMs, triggerType: 'CAMERA' }]);
+      setQueue((prev) => [...prev, { capturedAtMs: rawMs, displayMs, triggerType: 'CAMERA' }]);
     }
   }
 
