@@ -26,6 +26,7 @@ Companion backend: [`../kronnus-api`](../kronnus-api) (Go + Fiber).
 ```bash
 # from ../kronnus-api
 cp .env.example .env   # first time only
+make db-up             # start PostgreSQL + run migrations
 make run
 ```
 

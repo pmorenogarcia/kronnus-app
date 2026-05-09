@@ -1,12 +1,30 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
- */
-
 import { Platform } from 'react-native';
 
 const tintColorLight = '#0a7ea4';
 const tintColorDark = '#fff';
+
+// Kronnus design-system tokens (dark theme only)
+export const AppColors = {
+  bg: '#131313',
+  bgBar: '#0F0F0F',
+  bgModal: '#181617',
+  bgCard: '#1A1819',
+  bgCardAlt: '#1E1C1D',
+  accent: '#EDD83D',
+  accentBg: '#EDD83D14',
+  accentBorder: '#EDD83D40',
+  accentGlow: '#EDD83D59',
+  accentAura: '#EDD83D1F',
+  accentTimerGlow: '#EDD83D66',
+  accentMs: '#EDD83D80',
+  accentModalGlow: '#EDD83D4D',
+  accentMs2: '#EDD83D73',
+  accentAssignedBorder: '#EDD83D33',
+  border: '#2A2728',
+  textPrimary: '#E2DADB',
+  textSecondary: '#6D696A',
+  textMuted: '#A2A7A5',
+};
 
 export const Colors = {
   light: {

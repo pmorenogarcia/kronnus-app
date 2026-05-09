@@ -27,13 +27,23 @@ is the React Native + Expo frontend. The companion backend lives in `../kronnus-
 - Checkpoint triggers supported: digital button press, camera sensor detection
   (Bluetooth laser trigger is a stretch goal if time allows)
 - Time sync: device sends ping to server, calculates round-trip offset (NTP-like)
+- NTP offset is applied **server-side** — the app sends raw `Date.now()` timestamps;
+  `service.go` adds `clock_offset_ms` from the checkpoints table to produce `corrected_at`
 - Precision target: ~10–20ms accuracy (to be measured and documented honestly for academic purposes)
+
+## API Layer Conventions
+
+- `API_BASE_URL` is exported **once** from `src/api/client.ts` — never redefine it locally
+- All session CRUD lives in `src/api/client.ts`; all timestamp CRUD in `src/api/timestamps.ts`
+- WebSocket message types live in `src/ws/messages.ts` and must mirror `internal/ws/message.go`
+- Design tokens live in `constants/theme.ts` as `AppColors` — do not redefine inline per screen
 
 ## Project Structure Conventions
 
 - Barrel exports per folder — always use `index.ts` re-exports, never import directly from deep paths
 - Components are colocated with their styles and types when small enough
 - Shared types (especially WebSocket message shapes) live in a dedicated `types/` folder
+- Tests live in `__tests__/` (root) — not co-located with source files
 - Keep `.env.example` up to date when adding new environment variables
 
 ## Code Conventions

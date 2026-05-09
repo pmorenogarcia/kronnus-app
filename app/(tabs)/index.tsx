@@ -3,6 +3,8 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Image,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -75,7 +77,8 @@ interface DeleteState {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { token, user } = useAuth();
+  const { token, user, signOut } = useAuth();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { draftCreated, draftName } = useLocalSearchParams<{
     draftCreated?: string;
     draftName?: string;
@@ -200,17 +203,20 @@ export default function HomeScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.logoRow}>
-          <View style={styles.logoIconWrapper}>
-            <Feather name="clock" size={20} color="#0F0F0F" />
-          </View>
+          <Image source={require('../../assets/images/icon.png')} style={styles.logoIcon} />
           <View>
             <Text style={styles.logoName}>KRONNUS</Text>
             <Text style={styles.logoTagline}>JUST IN TIME</Text>
           </View>
         </View>
-        <View style={styles.avatarWrapper}>
+        <TouchableOpacity
+          style={styles.avatarWrapper}
+          onPress={() => setUserMenuOpen(true)}
+          activeOpacity={0.75}
+          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+        >
           <Text style={styles.avatarText}>{initials}</Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -457,6 +463,78 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
       )}
+
+      {/* ─── User menu popup ─────────────────────────────────────────────────── */}
+      <Modal
+        visible={userMenuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUserMenuOpen(false)}
+      >
+        <View style={StyleSheet.absoluteFill}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setUserMenuOpen(false)}
+          />
+          <View style={[styles.userMenu, { top: insets.top + 70 }]}>
+            {/* My Profile */}
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemBorder]}
+              activeOpacity={0.75}
+              onPress={() => {
+                setUserMenuOpen(false);
+                router.push('/(tabs)/profile' as never);
+              }}
+            >
+              <Feather name="user" size={15} color={C.textMuted} />
+              <Text style={styles.menuItemText}>My Profile</Text>
+              <Feather name="chevron-right" size={14} color={C.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Settings */}
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemBorder]}
+              activeOpacity={0.75}
+              onPress={() => {
+                setUserMenuOpen(false);
+                router.push('/settings' as never);
+              }}
+            >
+              <Feather name="settings" size={15} color={C.textMuted} />
+              <Text style={styles.menuItemText}>Settings</Text>
+              <Feather name="chevron-right" size={14} color={C.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Contact */}
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuItemBorder]}
+              activeOpacity={0.75}
+              onPress={() => {
+                setUserMenuOpen(false);
+                router.push('/contact' as never);
+              }}
+            >
+              <Feather name="mail" size={15} color={C.textMuted} />
+              <Text style={styles.menuItemText}>Contact</Text>
+              <Feather name="chevron-right" size={14} color={C.textSecondary} />
+            </TouchableOpacity>
+
+            {/* Log Out */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              activeOpacity={0.75}
+              onPress={() => {
+                setUserMenuOpen(false);
+                void signOut();
+              }}
+            >
+              <Feather name="log-out" size={15} color={C.error} />
+              <Text style={[styles.menuItemText, styles.menuItemDanger]}>Log Out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -478,13 +556,10 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   logoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  logoIconWrapper: {
+  logoIcon: {
     width: 40,
     height: 40,
     borderRadius: 10,
-    backgroundColor: C.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   logoName: {
     fontFamily: 'BarlowCondensed-Black',
@@ -806,4 +881,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: C.textMuted,
   },
+
+  // User menu popup
+  userMenu: {
+    position: 'absolute',
+    right: 16,
+    width: 220,
+    backgroundColor: C.bgCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  menuItemBorder: { borderBottomWidth: 1, borderBottomColor: C.border },
+  menuItemText: {
+    flex: 1,
+    fontFamily: 'Barlow-SemiBold',
+    fontSize: 15,
+    color: C.textPrimary,
+  },
+  menuItemDanger: { color: C.error },
 });

@@ -5,7 +5,7 @@
  * environment to avoid jest-expo's native-module bootstrap overhead.
  */
 
-import { computeAverageLuminance, isMotionDetected } from './useCameraMotionDetector';
+import { computeAverageLuminance, isMotionDetected } from '../src/hooks/useCameraMotionDetector';
 
 describe('computeAverageLuminance', () => {
   it('returns 0 for empty data', () => {

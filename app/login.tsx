@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -75,9 +76,7 @@ export default function LoginScreen() {
       >
         {/* Logo */}
         <View style={styles.logoRow}>
-          <View style={styles.logoIconWrapper}>
-            <Feather name="clock" size={24} color={C.dark} />
-          </View>
+          <Image source={require('../assets/images/icon.png')} style={styles.logoIcon} />
           <View>
             <Text style={styles.logoName}>KRONNUS</Text>
             <Text style={styles.logoTagline}>JUST IN TIME</Text>
@@ -200,13 +199,10 @@ const styles = StyleSheet.create({
     gap: 14,
     alignSelf: 'center',
   },
-  logoIconWrapper: {
+  logoIcon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: C.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   logoName: {
     fontFamily: 'BarlowCondensed-ExtraBold',

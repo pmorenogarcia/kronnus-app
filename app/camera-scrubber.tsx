@@ -1,23 +1,23 @@
 /**
- * Camera scrubber — manual timestamp via burst recording.
+ * Camera scrubber — manual timestamp via video recording.
  *
  * ready → recording → scrub → confirm → back
  *
- * Operator presses START: frames are captured at ~15fps (shutterSound and
- * animateShutter both disabled). Each frame stores its URI and the exact
- * Date.now() at capture time. After STOP, the operator scrubs through frames
- * to pick the exact crossing moment. The confirmed timestamp is the stored
- * Date.now() for that frame, corrected by the NTP offset.
+ * The operator records a short clip at the device's native frame rate (~30fps).
+ * recordingStartMs is snapped at the call site. After STOP the scrub phase
+ * opens instantly — no frame extraction. An expo-video player shows the clip
+ * paused; dragging the slider sets player.currentTime so the operator can
+ * identify the exact crossing frame. Confirmed timestamp =
+ * recordingStartMs + seekMs + ntpOffsetMs.
  *
- * NOTE: @react-native-community/slider is a native module — EAS Build is
- * required. This screen will not work in Expo Go.
+ * NOTE: expo-camera and expo-video are native modules — EAS Build required.
  */
 
 import { Feather } from '@expo/vector-icons';
 import { CameraView } from 'expo-camera';
-import { Image } from 'expo-image';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -39,18 +39,139 @@ const C = {
   danger: '#E05252',
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const CAPTURE_INTERVAL_MS = 67; // ~15 fps — matches motion detector poll rate
-const MAX_FRAMES = 225; // 15-second cap at 15fps
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Phase = 'ready' | 'recording' | 'scrub';
 
-interface CapturedFrame {
+interface RecordedClip {
   uri: string;
-  timestamp: number; // Date.now() at moment of capture
+  durationMs: number;
+  startMs: number;
+}
+
+// ─── ScrubView (sub-component — only mounted when clip is available) ──────────
+
+interface ScrubViewProps {
+  clip: RecordedClip;
+  ntpOffsetMs: number;
+  sessionStartMs: number;
+  sessionCode: string;
+  token: string;
+  onRetake: () => void;
+  onClose: () => void;
+}
+
+function ScrubView({
+  clip,
+  ntpOffsetMs,
+  sessionStartMs,
+  sessionCode,
+  token,
+  onRetake,
+  onClose,
+}: ScrubViewProps) {
+  const player = useVideoPlayer(clip.uri, (p) => {
+    p.muted = true;
+    p.loop = false;
+    p.pause();
+  });
+
+  const [seekMs, setSeekMs] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Apply NTP offset for display only; raw timestamp is sent to API (server corrects).
+  const elapsedMs = Math.max(0, clip.startMs + ntpOffsetMs + seekMs - sessionStartMs);
+
+  function handleSlidingStart() {
+    player.scrubbingModeOptions = { scrubbingModeEnabled: true };
+  }
+
+  function handleValueChange(v: number) {
+    const ms = Math.round(v);
+    setSeekMs(ms);
+    player.currentTime = ms / 1000;
+  }
+
+  function handleSlidingComplete(v: number) {
+    const ms = Math.round(v);
+    setSeekMs(ms);
+    player.currentTime = ms / 1000;
+    player.scrubbingModeOptions = { scrubbingModeEnabled: false };
+  }
+
+  async function handleConfirm() {
+    if (submitting) return;
+    setSubmitting(true);
+    const correctedMs = clip.startMs + seekMs; // raw — server applies NTP offset
+    try {
+      await captureTimestamp(token, sessionCode, correctedMs, 'CAMERA');
+    } catch {
+      // best-effort; timing screen owns the offline queue
+    } finally {
+      setSubmitting(false);
+      onClose();
+    }
+  }
+
+  return (
+    <View style={styles.scrubPhase}>
+      {/* Video viewer */}
+      <View style={styles.frameWrap}>
+        <VideoView
+          player={player}
+          style={StyleSheet.absoluteFillObject}
+          contentFit="contain"
+          nativeControls={false}
+        />
+        <View style={styles.frameBadge}>
+          <Text style={styles.frameBadgeText}>
+            {formatElapsedMs(seekMs)} / {formatElapsedMs(clip.durationMs)}
+          </Text>
+        </View>
+      </View>
+
+      {/* Timestamp for selected position */}
+      <View style={styles.timeCard}>
+        <Text style={styles.timeLabel}>FRAME TIME</Text>
+        <Text style={styles.timeValue}>{formatElapsedMs(elapsedMs)}</Text>
+      </View>
+
+      {/* Seek scrubber */}
+      <Slider
+        style={styles.slider}
+        minimumValue={0}
+        maximumValue={clip.durationMs}
+        step={1}
+        value={seekMs}
+        onSlidingStart={handleSlidingStart}
+        onValueChange={handleValueChange}
+        onSlidingComplete={handleSlidingComplete}
+        minimumTrackTintColor={C.accent}
+        maximumTrackTintColor={C.border}
+        thumbTintColor={C.accent}
+      />
+      <Text style={styles.sliderHint}>
+        Drag to find the exact moment the rider crossed the line
+      </Text>
+
+      {/* Confirm */}
+      <TouchableOpacity
+        style={[styles.confirmBtn, submitting && styles.confirmBtnDisabled]}
+        onPress={handleConfirm}
+        activeOpacity={0.85}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#0F0F0F" size="small" />
+        ) : (
+          <>
+            <Feather name="check" size={16} color="#0F0F0F" />
+            <Text style={styles.confirmBtnText}>CONFIRM TIMESTAMP</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
 }
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -69,101 +190,48 @@ export default function CameraScrubberScreen() {
   const sessionStartMs = Number(session_start_ms ?? 0);
 
   const cameraRef = useRef<CameraView>(null);
-  const framesRef = useRef<CapturedFrame[]>([]);
-  const captureActiveRef = useRef(false); // prevents overlapping takePictureAsync calls
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingStartMsRef = useRef(0);
+  const stopMsRef = useRef(0);
 
   const [phase, setPhase] = useState<Phase>('ready');
-  const [frameCount, setFrameCount] = useState(0);
-  const [frames, setFrames] = useState<CapturedFrame[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      if (intervalRef.current !== null) clearInterval(intervalRef.current);
-    };
-  }, []);
+  const [clip, setClip] = useState<RecordedClip | null>(null);
 
   function startRecording() {
-    framesRef.current = [];
-    captureActiveRef.current = false;
-    setFrameCount(0);
+    if (!cameraRef.current) return;
+    recordingStartMsRef.current = Date.now();
     setPhase('recording');
 
-    intervalRef.current = setInterval(async () => {
-      if (captureActiveRef.current || !cameraRef.current) return;
-      if (framesRef.current.length >= MAX_FRAMES) {
-        finishRecording();
-        return;
-      }
-
-      captureActiveRef.current = true;
-      const timestamp = Date.now();
-      try {
-        const pic = await cameraRef.current.takePictureAsync({
-          base64: false,
-          quality: 0.3,
-          shutterSound: false,
-        });
-        framesRef.current.push({ uri: pic.uri, timestamp });
-        setFrameCount(framesRef.current.length);
-      } catch {
-        // frame lost — continue
-      } finally {
-        captureActiveRef.current = false;
-      }
-    }, CAPTURE_INTERVAL_MS);
+    cameraRef.current
+      .recordAsync({ maxDuration: 15 })
+      .then((result) => {
+        if (!result) {
+          setPhase('ready');
+          return;
+        }
+        const durationMs = Math.max(stopMsRef.current - recordingStartMsRef.current, 1000);
+        setClip({ uri: result.uri, durationMs, startMs: recordingStartMsRef.current });
+        setPhase('scrub');
+      })
+      .catch(() => setPhase('ready'));
   }
 
-  function finishRecording() {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    const captured = [...framesRef.current];
-    if (captured.length === 0) {
-      setPhase('ready');
-      return;
-    }
-    setFrames(captured);
-    setSelectedIndex(0);
-    setPhase('scrub');
+  function stopRecording() {
+    stopMsRef.current = Date.now();
+    cameraRef.current?.stopRecording();
   }
 
   function handleClose() {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    if (phase === 'recording') stopRecording();
     router.back();
   }
 
-  async function handleConfirm() {
-    if (frames.length === 0 || !token || submitting) return;
-    setSubmitting(true);
-
-    const correctedMs = frames[selectedIndex].timestamp + ntpOffsetMs;
-
-    try {
-      await captureTimestamp(token, session_code, correctedMs, 'CAMERA');
-    } catch {
-      // best-effort; timing screen owns the offline queue
-    } finally {
-      setSubmitting(false);
-      router.back();
-    }
+  function handleRetake() {
+    setClip(null);
+    setPhase('ready');
   }
 
-  const selectedFrame = frames[selectedIndex];
-  const elapsedMs = selectedFrame ? Math.max(0, selectedFrame.timestamp - sessionStartMs) : 0;
-
   const headerTitle =
-    phase === 'ready'
-      ? 'MANUAL CAPTURE'
-      : phase === 'recording'
-        ? `RECORDING · ${frameCount}`
-        : 'SELECT FRAME';
+    phase === 'ready' ? 'MANUAL CAPTURE' : phase === 'recording' ? 'RECORDING' : 'SELECT FRAME';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -181,7 +249,7 @@ export default function CameraScrubberScreen() {
         {phase === 'scrub' ? (
           <TouchableOpacity
             style={styles.headerBtn}
-            onPress={() => setPhase('ready')}
+            onPress={handleRetake}
             activeOpacity={0.7}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
@@ -193,63 +261,16 @@ export default function CameraScrubberScreen() {
       </View>
 
       {/* ── Body ── */}
-      {phase === 'scrub' ? (
-        <View style={styles.scrubPhase}>
-          {/* Frame viewer */}
-          <View style={styles.frameWrap}>
-            {selectedFrame && (
-              <Image
-                source={{ uri: selectedFrame.uri }}
-                style={StyleSheet.absoluteFillObject}
-                contentFit="contain"
-              />
-            )}
-            <View style={styles.frameBadge}>
-              <Text style={styles.frameBadgeText}>
-                {selectedIndex + 1} / {frames.length}
-              </Text>
-            </View>
-          </View>
-
-          {/* Timestamp for selected frame */}
-          <View style={styles.timeCard}>
-            <Text style={styles.timeLabel}>FRAME TIME</Text>
-            <Text style={styles.timeValue}>{formatElapsedMs(elapsedMs)}</Text>
-          </View>
-
-          {/* Frame scrubber */}
-          <Slider
-            style={styles.slider}
-            minimumValue={0}
-            maximumValue={Math.max(0, frames.length - 1)}
-            step={1}
-            value={selectedIndex}
-            onValueChange={(v) => setSelectedIndex(Math.round(v))}
-            minimumTrackTintColor={C.accent}
-            maximumTrackTintColor={C.border}
-            thumbTintColor={C.accent}
-          />
-          <Text style={styles.sliderHint}>
-            Drag to find the exact frame where the rider crossed the line
-          </Text>
-
-          {/* Confirm */}
-          <TouchableOpacity
-            style={[styles.confirmBtn, submitting && styles.confirmBtnDisabled]}
-            onPress={handleConfirm}
-            activeOpacity={0.85}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator color="#0F0F0F" size="small" />
-            ) : (
-              <>
-                <Feather name="check" size={16} color="#0F0F0F" />
-                <Text style={styles.confirmBtnText}>CONFIRM TIMESTAMP</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
+      {phase === 'scrub' && clip && token ? (
+        <ScrubView
+          clip={clip}
+          ntpOffsetMs={ntpOffsetMs}
+          sessionStartMs={sessionStartMs}
+          sessionCode={session_code}
+          token={token}
+          onRetake={handleRetake}
+          onClose={() => router.back()}
+        />
       ) : (
         <View style={styles.recordPhase}>
           {/* Viewfinder — always mounted during ready/recording */}
@@ -259,6 +280,7 @@ export default function CameraScrubberScreen() {
               style={StyleSheet.absoluteFillObject}
               facing="back"
               animateShutter={false}
+              mute
             />
 
             {phase === 'ready' && (
@@ -281,7 +303,7 @@ export default function CameraScrubberScreen() {
               <Text style={styles.startBtnText}>START RECORDING</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.stopBtn} onPress={finishRecording} activeOpacity={0.8}>
+            <TouchableOpacity style={styles.stopBtn} onPress={stopRecording} activeOpacity={0.8}>
               <View style={styles.stopSquare} />
               <Text style={styles.stopBtnText}>STOP</Text>
             </TouchableOpacity>

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/contexts';
+import { API_BASE_URL } from '@/src/api/client';
 import { computeBackoffMs } from '@/src/ws/backoff';
 import type { WsMessage } from '@/src/ws/messages';
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const MAX_ATTEMPTS = 6;
 
 function toWsUrl(sessionId: string, token: string): string {
