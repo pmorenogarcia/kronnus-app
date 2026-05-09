@@ -202,7 +202,7 @@ export default function CameraScrubberScreen() {
     setPhase('recording');
 
     cameraRef.current
-      .recordAsync({ maxDuration: 15, mute: true })
+      .recordAsync({ maxDuration: 15 })
       .then((result) => {
         if (!result) {
           setPhase('ready');
@@ -280,6 +280,7 @@ export default function CameraScrubberScreen() {
               style={StyleSheet.absoluteFillObject}
               facing="back"
               animateShutter={false}
+              mute
             />
 
             {phase === 'ready' && (
