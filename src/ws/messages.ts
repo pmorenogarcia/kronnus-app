@@ -38,7 +38,7 @@ export type RoleAssignMsg = Envelope<
 
 export type RoleAssignedMsg = Envelope<'ROLE_ASSIGNED', { user_id: string; role: CheckpointRole }>;
 
-export type SessionStartMsg = Envelope<'SESSION_START'>;
+export type SessionStartMsg = Envelope<'SESSION_START', { session_id: string }>;
 
 export type SessionEndMsg = Envelope<'SESSION_END', { session_id: string }>;
 

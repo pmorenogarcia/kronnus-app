@@ -1,15 +1,18 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+import { API_BASE_URL } from './client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface Timestamp {
   id: string;
   session_id: string;
+  checkpoint_id: string;
+  checkpoint_role: 'START' | 'SPLIT' | 'END';
   captured_at: string;
   corrected_at: string;
   sequence_number: number;
   competitor_id: string | null;
   trigger_type: 'BUTTON' | 'CAMERA';
+  created_at: string;
 }
 
 export class TimestampError extends Error {

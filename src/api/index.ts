@@ -1,5 +1,6 @@
 export { RegistrationError, registerUser, UpdateProfileError, updateMe } from './auth';
 export {
+  API_BASE_URL,
   AuthError,
   loginUser,
   getMe,
@@ -8,13 +9,14 @@ export {
   SessionError,
   createSession,
   openSession,
-  listMySessions,
+  listSessions,
   startSession,
   joinSession,
   getSessionState,
   setCheckpointRole,
   addCompetitor,
   listCompetitors,
+  deleteSession,
 } from './client';
 export type {
   SportType,
@@ -27,7 +29,6 @@ export type {
   SessionStateResponse,
   Competitor,
 } from './client';
-export { listSessions, deleteSession } from './sessions';
 export { captureTimestamp, assignCompetitor, listTimestamps, TimestampError } from './timestamps';
 export type { Timestamp } from './timestamps';
 export { getResults } from './results';

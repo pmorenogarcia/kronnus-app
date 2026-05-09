@@ -1,7 +1,8 @@
 import type { User } from '@/types';
 import { setItem } from '@/src/utils/storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+import { API_BASE_URL } from './client';
+
 const AUTH_TOKEN_KEY = 'auth_token';
 
 export class RegistrationError extends Error {
@@ -115,6 +116,6 @@ export async function updateMe(
     throw new UpdateProfileError('Failed to update profile. Please try again.', response.status);
   }
 
-  const data = (await response.json()) as { user_id: string; email: string; username?: string };
-  return { id: data.user_id, email: data.email, username: data.username };
+  const data = (await response.json()) as { id: string; email: string; username?: string };
+  return { id: data.id, email: data.email, username: data.username };
 }

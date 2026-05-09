@@ -1,7 +1,7 @@
 import { User } from '@/types';
 import { deleteItem, getItem, setItem } from '@/src/utils/storage';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 const AUTH_TOKEN_KEY = 'auth_token';
 
 // ─── Error classes ───────────────────────────────────────────────────────────
@@ -101,8 +101,8 @@ export async function getMe(token: string): Promise<User> {
     throw new AuthError('Failed to fetch user profile.', response.status);
   }
 
-  const data = (await response.json()) as { user_id: string; email: string; username?: string };
-  return { id: data.user_id, email: data.email, username: data.username };
+  const data = (await response.json()) as { id: string; email: string; username?: string };
+  return { id: data.id, email: data.email, username: data.username };
 }
 
 export async function getStoredToken(): Promise<string | null> {
@@ -160,7 +160,7 @@ export async function openSession(token: string, sessionId: string): Promise<Ses
   return (await response.json()) as Session;
 }
 
-export async function listMySessions(token: string): Promise<Session[]> {
+export async function listSessions(token: string): Promise<Session[]> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions`, {
@@ -329,4 +329,22 @@ export async function getSessionState(
     throw new SessionError('Failed to fetch session state.', response.status);
   }
   return (await response.json()) as SessionStateResponse;
+}
+
+export async function deleteSession(token: string, sessionId: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    throw new SessionError('Could not connect to the server. Check your connection and try again.');
+  }
+  if (response.status === 409) {
+    throw new SessionError('Cannot delete a session that is in progress', 409);
+  }
+  if (response.status !== 204) {
+    throw new SessionError('Failed to delete session.', response.status);
+  }
 }

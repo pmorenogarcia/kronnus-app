@@ -24,30 +24,7 @@ import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
 import { useSessionSocket, useSettings } from '@/src/hooks';
-
-// ─── Design tokens (Paper) ────────────────────────────────────────────────────
-
-const C = {
-  bg: '#131313',
-  bgBar: '#0F0F0F',
-  bgModal: '#181617',
-  bgCard: '#1A1819',
-  bgCardAlt: '#1E1C1D',
-  accent: '#EDD83D',
-  accentBg: '#EDD83D14',
-  accentBorder: '#EDD83D40',
-  accentGlow: '#EDD83D59',
-  accentAura: '#EDD83D1F',
-  accentTimerGlow: '#EDD83D66',
-  accentMs: '#EDD83D80',
-  accentModalGlow: '#EDD83D4D',
-  accentMs2: '#EDD83D73',
-  accentAssignedBorder: '#EDD83D33',
-  border: '#2A2728',
-  textPrimary: '#E2DADB',
-  textSecondary: '#6D696A',
-  textMuted: '#A2A7A5',
-};
+import { AppColors as C } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -151,7 +128,7 @@ function TimingPortal() {
       <View style={[P.root, { paddingTop: portalInsets.top }]}>
         <Tabs.Screen options={{ headerShown: false }} />
         <View style={P.centerWrap}>
-          <ActivityIndicator color={portalC.accent} size="small" />
+          <ActivityIndicator color={C.accent} size="small" />
         </View>
       </View>
     );
@@ -165,7 +142,7 @@ function TimingPortal() {
         <View style={P.centerWrap}>
           <View style={P.card}>
             <View style={P.cardIcon}>
-              <Feather name="clock" size={22} color={portalC.accent} />
+              <Feather name="clock" size={22} color={C.accent} />
             </View>
             <Text style={P.cardTitle}>{s.name.toUpperCase()}</Text>
             <Text style={P.cardSub}>Session is waiting — set up devices and start.</Text>
@@ -200,7 +177,7 @@ function TimingPortal() {
         <View style={P.centerWrap}>
           <View style={P.card}>
             <View style={P.cardIcon}>
-              <Feather name="wifi" size={22} color={portalC.accent} />
+              <Feather name="wifi" size={22} color={C.accent} />
             </View>
             <Text style={P.cardTitle}>{s.name.toUpperCase()}</Text>
             <Text style={P.cardSub}>Waiting for session to start — reconnect to your spot.</Text>
@@ -232,7 +209,7 @@ function TimingPortal() {
     <View style={[P.root, { paddingTop: portalInsets.top }]}>
       <Tabs.Screen options={{ headerShown: false }} />
       <View style={P.centerWrap}>
-        <Feather name="clock" size={32} color={portalC.textSecondary} />
+        <Feather name="clock" size={32} color={C.textSecondary} />
         <Text style={P.noneTitle}>NO ACTIVE SESSION</Text>
         <Text style={P.noneSub}>Create or join a session from the Home tab to get started.</Text>
       </View>
@@ -240,18 +217,8 @@ function TimingPortal() {
   );
 }
 
-const portalC = {
-  bg: '#131313',
-  bgCard: '#1A1819',
-  accent: '#EDD83D',
-  border: '#2A2728',
-  textPrimary: '#E2DADB',
-  textSecondary: '#6D696A',
-  textMuted: '#A2A7A5',
-};
-
 const portalStyles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: portalC.bg },
+  root: { flex: 1, backgroundColor: C.bg },
   centerWrap: {
     flex: 1,
     alignItems: 'center',
@@ -261,10 +228,10 @@ const portalStyles = StyleSheet.create({
   },
   card: {
     width: '100%',
-    backgroundColor: portalC.bgCard,
+    backgroundColor: C.bgCard,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: portalC.border,
+    borderColor: C.border,
     padding: 24,
     alignItems: 'center',
     gap: 10,
@@ -284,13 +251,13 @@ const portalStyles = StyleSheet.create({
     fontFamily: 'BarlowCondensed-Black',
     fontSize: 20,
     letterSpacing: 1,
-    color: portalC.textPrimary,
+    color: C.textPrimary,
     textAlign: 'center',
   },
   cardSub: {
     fontFamily: 'Barlow-Regular',
     fontSize: 13,
-    color: portalC.textSecondary,
+    color: C.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 6,
@@ -299,7 +266,7 @@ const portalStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: portalC.accent,
+    backgroundColor: C.accent,
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 22,
@@ -314,14 +281,14 @@ const portalStyles = StyleSheet.create({
     fontFamily: 'BarlowCondensed-Bold',
     fontSize: 16,
     letterSpacing: 2,
-    color: portalC.textSecondary,
+    color: C.textSecondary,
     textTransform: 'uppercase',
     marginTop: 8,
   },
   noneSub: {
     fontFamily: 'Barlow-Regular',
     fontSize: 13,
-    color: portalC.textSecondary,
+    color: C.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     maxWidth: 260,

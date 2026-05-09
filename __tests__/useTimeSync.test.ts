@@ -5,7 +5,7 @@
  * environment to avoid jest-expo's native-module bootstrap overhead.
  */
 
-import { calculateOffsetNs, calculateRttNs, median } from './useTimeSync';
+import { calculateOffsetNs, calculateRttNs, median } from '../src/hooks/useTimeSync';
 
 // All timestamps in nanoseconds, matching the backend protocol.
 // Derivation helpers used to construct test fixtures:
