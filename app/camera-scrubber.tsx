@@ -261,13 +261,13 @@ export default function CameraScrubberScreen() {
       </View>
 
       {/* ── Body ── */}
-      {phase === 'scrub' && clip && token ? (
+      {phase === 'scrub' && clip ? (
         <ScrubView
           clip={clip}
           ntpOffsetMs={ntpOffsetMs}
           sessionStartMs={sessionStartMs}
           sessionCode={session_code}
-          token={token}
+          token={token ?? ''}
           onRetake={handleRetake}
           onClose={() => router.back()}
         />
@@ -279,6 +279,7 @@ export default function CameraScrubberScreen() {
               ref={cameraRef}
               style={StyleSheet.absoluteFillObject}
               facing="back"
+              mode="video"
               animateShutter={false}
               mute
             />

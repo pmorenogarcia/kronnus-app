@@ -6,8 +6,8 @@ on:
       - develop
 
 jobs:
-  build-and-distribute:
-    name: EAS Preview Build (Android)
+  update:
+    name: EAS Update (preview)
     runs-on: ubuntu-latest
 
     steps:
@@ -35,11 +35,11 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
 
-      - name: Build preview APK
+      - name: Publish OTA update
         run: >
-          eas build
-          --profile preview
-          --platform android
+          eas update
+          --branch preview
+          --message "${{ github.event.head_commit.message }}"
           --non-interactive
         env:
           EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}

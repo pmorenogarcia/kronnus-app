@@ -29,13 +29,16 @@ const C = {
   textSecondary: '#6D696A',
   textMuted: '#A2A7A5',
   border: '#2A2728',
+  danger: '#E05252',
+  dangerBg: 'rgba(224,82,82,0.08)',
+  dangerBorder: 'rgba(224,82,82,0.20)',
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { token, user } = useAuth();
+  const { token, user, signOut } = useAuth();
   const [sessionCount, setSessionCount] = useState<number | null>(null);
 
   useFocusEffect(
@@ -125,6 +128,12 @@ export default function ProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Sign out ── */}
+        <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.8}>
+          <Feather name="log-out" size={15} color={C.danger} />
+          <Text style={styles.signOutText}>SIGN OUT</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -274,5 +283,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Barlow-SemiBold',
     fontSize: 15,
     color: C.textPrimary,
+  },
+
+  // Sign out
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: C.dangerBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.dangerBorder,
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  signOutText: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 14,
+    letterSpacing: 2,
+    color: C.danger,
   },
 });
