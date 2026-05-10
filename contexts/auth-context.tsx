@@ -41,10 +41,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     getMe(token)
       .then(setUser)
-      .catch((err: unknown) => {
-        // Expired or revoked token — sign out so the user reaches the login screen cleanly
+      .catch(async (err: unknown) => {
+        // Expired or revoked token — await the delete so SecureStore is idle before we
+        // show the login screen; loginUser's setItem then writes to a clean key with no race.
         if (err instanceof AuthError && (err.statusCode === 401 || err.statusCode === 403)) {
-          void clearStoredToken();
+          await clearStoredToken();
           setToken(null);
         }
         // Network/server errors: keep token, user stays null (stay "authenticated" locally)
