@@ -78,6 +78,7 @@ function ScrubView({
 
   const [seekMs, setSeekMs] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Apply NTP offset for display only; raw timestamp is sent to API (server corrects).
   const elapsedMs = Math.max(0, clip.startMs + ntpOffsetMs + seekMs - sessionStartMs);
@@ -102,17 +103,20 @@ function ScrubView({
   async function handleConfirm() {
     if (submitting) return;
     setSubmitting(true);
-    const correctedMs = clip.startMs + seekMs; // raw — server applies NTP offset
+    setSubmitError(null);
+    // Snapshot seekMs before the await so correctedMs and displayMs are consistent
+    // even if the slider is moved while the request is in flight.
+    const snapshotMs = seekMs;
+    const correctedMs = clip.startMs + snapshotMs; // raw — server applies NTP offset
     try {
       const ts = await captureTimestamp(token, sessionCode, correctedMs, 'CAMERA');
-      // NTP-corrected absolute ms — timing screen subtracts sessionStartMs for elapsed display
-      const displayMs = clip.startMs + seekMs + ntpOffsetMs;
+      const displayMs = clip.startMs + snapshotMs + ntpOffsetMs;
       setPendingCameraTimestamp({ timestamp: ts, capturedAtMs: displayMs });
+      onClose(); // navigate back only on success
     } catch {
-      // best-effort; timing screen owns the offline queue
-    } finally {
+      // Keep the scrubber open so the operator can retry — don't silently discard.
       setSubmitting(false);
-      onClose();
+      setSubmitError('Could not save timestamp — check connection and try again.');
     }
   }
 
@@ -156,6 +160,14 @@ function ScrubView({
       <Text style={styles.sliderHint}>
         Drag to find the exact moment the rider crossed the line
       </Text>
+
+      {/* API error — shown inline so the operator can retry without losing the clip */}
+      {submitError && (
+        <View style={styles.errorBox}>
+          <Feather name="alert-triangle" size={12} color={C.danger} />
+          <Text style={styles.errorText}>{submitError}</Text>
+        </View>
+      )}
 
       {/* Confirm */}
       <TouchableOpacity
@@ -521,5 +533,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
     letterSpacing: 2,
     color: '#0F0F0F',
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(224,82,82,0.08)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(224,82,82,0.25)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  errorText: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 12,
+    color: C.danger,
+    flex: 1,
+    lineHeight: 17,
   },
 });
