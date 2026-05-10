@@ -486,22 +486,35 @@ function TimingContent() {
   const modalSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
+  // openModal only sets state — the slide-in animation is started by the
+  // useEffect below, after the Animated.View is guaranteed to be mounted.
+  // Starting a useNativeDriver animation before the view exists silently
+  // completes it without updating the JS Animated.Value, leaving the modal
+  // stuck off-screen at translateY: SCREEN_HEIGHT.
   const openModal = useCallback((capture: PendingCapture) => {
     setPendingCapture(capture);
-    Animated.parallel([
-      Animated.spring(modalSlide, {
-        toValue: 0,
-        useNativeDriver: true,
-        tension: 65,
-        friction: 11,
-      }),
-      Animated.timing(backdropOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Start the slide-in animation only after pendingCapture is set AND the
+  // component has fully rendered (validating=false, no early-return spinner).
+  // This guarantees the Animated.View is mounted before the native animation runs.
+  useEffect(() => {
+    if (pendingCapture !== null && !validating) {
+      Animated.parallel([
+        Animated.spring(modalSlide, {
+          toValue: 0,
+          useNativeDriver: true,
+          tension: 65,
+          friction: 11,
+        }),
+        Animated.timing(backdropOpacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [pendingCapture, validating]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When returning from the camera scrubber, pick up the confirmed timestamp
   // and open the rider assignment modal — same flow as the button trigger.
