@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-import { clearStoredToken, getMe, getStoredToken } from '@/src/api';
+import { AuthError, clearStoredToken, getMe, getStoredToken } from '@/src/api';
 import type { User } from '@/types';
 
 interface AuthState {
@@ -23,12 +23,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     getStoredToken()
       .then((stored) => {
-        if (stored) setToken(stored);
+        if (stored) {
+          setToken(stored);
+          // isLoading stays true — cleared after getMe resolves below
+        } else {
+          setIsLoading(false);
+        }
       })
-      .finally(() => setIsLoading(false));
+      .catch(() => setIsLoading(false)); // SecureStore read failure → treat as no token
   }, []);
 
-  // Fetch user profile whenever token is set
+  // Fetch user profile whenever token is set; clears stale tokens on 401/403
   useEffect(() => {
     if (!token) {
       setUser(null);
@@ -36,7 +41,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     getMe(token)
       .then(setUser)
-      .catch(() => {});
+      .catch((err: unknown) => {
+        // Expired or revoked token — sign out so the user reaches the login screen cleanly
+        if (err instanceof AuthError && (err.statusCode === 401 || err.statusCode === 403)) {
+          void clearStoredToken();
+          setToken(null);
+        }
+        // Network/server errors: keep token, user stays null (stay "authenticated" locally)
+      })
+      .finally(() => setIsLoading(false));
   }, [token]);
 
   function signIn(newToken: string) {
