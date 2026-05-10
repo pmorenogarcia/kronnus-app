@@ -39,18 +39,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       return;
     }
+    let cancelled = false;
     getMe(token)
-      .then(setUser)
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
       .catch(async (err: unknown) => {
+        if (cancelled) return;
         // Expired or revoked token — await the delete so SecureStore is idle before we
         // show the login screen; loginUser's setItem then writes to a clean key with no race.
         if (err instanceof AuthError && (err.statusCode === 401 || err.statusCode === 403)) {
           await clearStoredToken();
-          setToken(null);
+          if (!cancelled) setToken(null);
         }
         // Network/server errors: keep token, user stays null (stay "authenticated" locally)
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   function signIn(newToken: string) {
