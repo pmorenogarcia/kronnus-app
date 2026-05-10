@@ -1,9 +1,10 @@
-name: Deploy — Preprod
+name: Deploy — Preprod (legacy)
+# Automatic deployment is now handled by the EAS Workflow at
+# .eas/workflows/deploy-preview.yml, which skips the build step when the
+# native fingerprint hasn't changed. Keep this file for emergency manual runs.
 
 on:
-  push:
-    branches:
-      - develop
+  workflow_dispatch:
 
 jobs:
   update:
