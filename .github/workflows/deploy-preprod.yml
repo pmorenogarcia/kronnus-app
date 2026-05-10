@@ -1,46 +1,74 @@
-name: Deploy — Preprod (legacy)
-# Automatic deployment is now handled by the EAS Workflow at
-# .eas/workflows/deploy-preview.yml, which skips the build step when the
-# native fingerprint hasn't changed. Keep this file for emergency manual runs.
+name: Deploy — Preview
+
+# Runs automatically on every push to develop (OTA update only).
+# To also build a new native binary — e.g. after app.json or native dep changes —
+# trigger manually with build_native: true.
 
 on:
+  push:
+    branches: [develop]
   workflow_dispatch:
+    inputs:
+      build_native:
+        description: 'Build a new native binary (needed when app.json or native deps change)'
+        type: boolean
+        default: false
 
 jobs:
-  update:
-    name: EAS Update (preview)
+  quality:
+    name: Lint & Type Check
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+      - run: npm ci
+      - run: npx expo lint
+      - run: npx tsc --noEmit
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npx expo lint
-
-      - name: Type check
-        run: npx tsc --noEmit
-
-      - name: Setup EAS
-        uses: expo/expo-github-action@v8
+  build:
+    name: EAS Build (preview binary)
+    needs: quality
+    if: github.event_name == 'workflow_dispatch' && inputs.build_native == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
+      - name: Build
+        run: eas build --profile preview --platform android --non-interactive
+        env:
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PREPROD }}
 
+  update:
+    name: EAS Update (preview channel)
+    needs: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
       - name: Publish OTA update
         run: >
           eas update
           --branch preview
-          --message "${{ github.event.head_commit.message }}"
+          --message "${{ github.event.head_commit.message || 'Manual deploy' }}"
           --non-interactive
         env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}
+          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PREPROD }}
