@@ -24,6 +24,7 @@ import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
 import { useSessionSocket, useSettings } from '@/src/hooks';
+import { takePendingCameraTimestamp } from '@/src/utils';
 import { AppColors as C } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -485,7 +486,7 @@ function TimingContent() {
   const modalSlide = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
 
-  function openModal(capture: PendingCapture) {
+  const openModal = useCallback((capture: PendingCapture) => {
     setPendingCapture(capture);
     Animated.parallel([
       Animated.spring(modalSlide, {
@@ -500,7 +501,16 @@ function TimingContent() {
         useNativeDriver: true,
       }),
     ]).start();
-  }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When returning from the camera scrubber, pick up the confirmed timestamp
+  // and open the rider assignment modal — same flow as the button trigger.
+  useFocusEffect(
+    useCallback(() => {
+      const pending = takePendingCameraTimestamp();
+      if (pending) openModal(pending);
+    }, [openModal]),
+  );
 
   function closeModal() {
     setAssignError(null);

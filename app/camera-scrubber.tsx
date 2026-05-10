@@ -24,7 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
 import { captureTimestamp } from '@/src/api/timestamps';
-import { formatElapsedMs } from '@/src/utils';
+import { formatElapsedMs, setPendingCameraTimestamp } from '@/src/utils';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -104,7 +104,10 @@ function ScrubView({
     setSubmitting(true);
     const correctedMs = clip.startMs + seekMs; // raw — server applies NTP offset
     try {
-      await captureTimestamp(token, sessionCode, correctedMs, 'CAMERA');
+      const ts = await captureTimestamp(token, sessionCode, correctedMs, 'CAMERA');
+      // NTP-corrected absolute ms — timing screen subtracts sessionStartMs for elapsed display
+      const displayMs = clip.startMs + seekMs + ntpOffsetMs;
+      setPendingCameraTimestamp({ timestamp: ts, capturedAtMs: displayMs });
     } catch {
       // best-effort; timing screen owns the offline queue
     } finally {
