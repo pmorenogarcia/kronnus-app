@@ -4,7 +4,8 @@ import { useAuth } from '@/contexts';
 import { API_BASE_URL } from '@/src/api/client';
 import { computeBackoffMs } from '@/src/ws/backoff';
 import type { WsMessage } from '@/src/ws/messages';
-const MAX_ATTEMPTS = 6;
+// 120 attempts × 30 s cap ≈ 60 minutes — enough for mountain sports dead zones.
+const MAX_ATTEMPTS = 120;
 
 function toWsUrl(sessionId: string, token: string): string {
   const base = API_BASE_URL.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
