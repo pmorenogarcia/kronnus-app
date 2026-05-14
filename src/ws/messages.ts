@@ -44,6 +44,19 @@ export type SessionEndMsg = Envelope<'SESSION_END', { session_id: string }>;
 
 export type SessionStartRejectedMsg = Envelope<'SESSION_START_REJECTED', { reason: string }>;
 
+// Server → client (individual, after SYNC_READY): provides persisted state for reconnect.
+// Fields are nullable — do NOT overwrite a valid local value with null from the server.
+export type SessionStateMsg = Envelope<
+  'SESSION_STATE',
+  {
+    session_id: string;
+    status: string;
+    started_at_ms: number | null;
+    role: CheckpointRole | null;
+    offset_ms: number | null;
+  }
+>;
+
 export type WsMessage =
   | DeviceConnectedMsg
   | DeviceDisconnectedMsg
@@ -55,4 +68,5 @@ export type WsMessage =
   | RoleAssignedMsg
   | SessionStartMsg
   | SessionEndMsg
-  | SessionStartRejectedMsg;
+  | SessionStartRejectedMsg
+  | SessionStateMsg;
