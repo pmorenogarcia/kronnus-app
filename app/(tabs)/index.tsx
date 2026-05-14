@@ -18,8 +18,8 @@ import { useAuth } from '@/contexts';
 import { deleteSession, getSessionState, listSessions, SessionError } from '@/src/api';
 import type { Session, SessionStatus } from '@/src/api';
 import { SessionStatusBadge } from '@/src/components';
-import { loadSession, clearSession } from '@/src/utils/sessionPersistence';
-import type { PersistedSessionState } from '@/src/utils/sessionPersistence';
+import { loadSession, clearSession } from '@/src/utils';
+import type { PersistedSessionState } from '@/src/utils';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 

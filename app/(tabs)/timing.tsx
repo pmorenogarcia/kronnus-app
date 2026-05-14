@@ -24,10 +24,16 @@ import { getSessionState, listCompetitors, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
 import { useSessionSocket, useSettings } from '@/src/hooks';
-import { takePendingCameraTimestamp } from '@/src/utils';
-import { saveSession, loadSession, clearSession } from '@/src/utils/sessionPersistence';
-import { saveQueue, loadQueue, clearQueue } from '@/src/utils/queuePersistence';
-import type { QueuedCapture } from '@/src/utils/queuePersistence';
+import {
+  takePendingCameraTimestamp,
+  saveSession,
+  loadSession,
+  clearSession,
+  saveQueue,
+  loadQueue,
+  clearQueue,
+} from '@/src/utils';
+import type { QueuedCapture } from '@/src/utils';
 import { AppColors as C } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
