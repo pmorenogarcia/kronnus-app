@@ -15,9 +15,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts';
-import { deleteSession, listSessions, SessionError } from '@/src/api';
+import { deleteSession, getSessionState, listSessions, SessionError } from '@/src/api';
 import type { Session, SessionStatus } from '@/src/api';
 import { SessionStatusBadge } from '@/src/components';
+import { loadSession, clearSession } from '@/src/utils/sessionPersistence';
+import type { PersistedSessionState } from '@/src/utils/sessionPersistence';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
@@ -63,6 +65,14 @@ function cardBorderColor(status: SessionStatus): string {
   return C.border;
 }
 
+function formatElapsed(ms: number): string {
+  const total = Math.max(0, ms);
+  const h = Math.floor(total / 3_600_000);
+  const m = Math.floor((total % 3_600_000) / 60_000);
+  const s = Math.floor((total % 60_000) / 1_000);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type DeletePhase = 'confirm' | 'deleting' | 'error';
@@ -89,6 +99,9 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+
+  const [liveSession, setLiveSession] = useState<PersistedSessionState | null>(null);
+  const [liveElapsedMs, setLiveElapsedMs] = useState(0);
 
   const toastAnim = useRef(new Animated.Value(0)).current;
   const toastShown = useRef(false);
@@ -119,6 +132,49 @@ export default function HomeScreen() {
       fetchSessions();
     }, [fetchSessions]),
   );
+
+  // Check for a persisted live session to show the LIVE NOW rejoin banner
+  useFocusEffect(
+    useCallback(() => {
+      if (!token) return;
+      let cancelled = false;
+
+      async function checkLive() {
+        try {
+          const persisted = await loadSession();
+          if (!persisted || cancelled) {
+            setLiveSession(null);
+            return;
+          }
+          const state = await getSessionState(token!, persisted.session_code);
+          if (cancelled) return;
+          if (state.session.status === 'ACTIVE') {
+            setLiveSession(persisted);
+          } else {
+            await clearSession();
+            setLiveSession(null);
+          }
+        } catch {
+          setLiveSession(null);
+        }
+      }
+
+      checkLive();
+      return () => {
+        cancelled = true;
+      };
+    }, [token]),
+  );
+
+  // Tick the elapsed timer while a live session is showing
+  useEffect(() => {
+    if (!liveSession) return;
+    const id = setInterval(() => {
+      const now = Date.now() + liveSession.offset_ms;
+      setLiveElapsedMs(Math.max(0, now - liveSession.session_start_ms));
+    }, 500);
+    return () => clearInterval(id);
+  }, [liveSession]);
 
   // Toast on draft save
   useEffect(() => {
@@ -196,6 +252,11 @@ export default function HomeScreen() {
     user?.username?.toUpperCase() ?? (user?.email ? user.email.split('@')[0].toUpperCase() : '—');
   const initials = (user?.username?.[0] ?? user?.email?.[0] ?? '?').toUpperCase();
 
+  // When the live session belongs to the coordinator it also appears in sessions[] — filter it out.
+  const visibleSessions = liveSession?.is_coordinator
+    ? sessions.filter((s) => s.id !== liveSession.session_id)
+    : sessions;
+
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
@@ -238,6 +299,43 @@ export default function HomeScreen() {
           <Text style={styles.welcomeName}>{displayName}</Text>
         </View>
 
+        {/* Live session rejoin banner */}
+        {liveSession && (
+          <TouchableOpacity
+            style={styles.liveBanner}
+            activeOpacity={0.82}
+            onPress={() =>
+              router.push({
+                pathname: '/(tabs)/timing' as never,
+                params: {
+                  session_id: liveSession.session_id,
+                  session_code: liveSession.session_code,
+                  session_name: liveSession.session_name,
+                  is_coordinator: String(liveSession.is_coordinator),
+                  offset_ms: String(liveSession.offset_ms),
+                  session_start_ms: String(liveSession.session_start_ms),
+                  role: liveSession.role,
+                },
+              })
+            }
+          >
+            <View style={styles.liveBannerLeft}>
+              <View style={styles.liveBannerTopRow}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveBannerTag}>LIVE NOW</Text>
+              </View>
+              <Text style={styles.liveBannerName} numberOfLines={1}>
+                {liveSession.session_name}
+              </Text>
+              <Text style={styles.liveBannerMeta}>
+                {liveSession.role ? liveSession.role : 'COORDINATOR'} ·{' '}
+                {formatElapsed(liveElapsedMs)}
+              </Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={C.accent} />
+          </TouchableOpacity>
+        )}
+
         {/* Action cards */}
         <View style={styles.actionRow}>
           <TouchableOpacity
@@ -268,16 +366,16 @@ export default function HomeScreen() {
         {/* Recent sessions */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>RECENT SESSIONS</Text>
-          {sessions.length > 0 && (
+          {visibleSessions.length > 0 && (
             <View style={styles.sessionCountBadge}>
-              <Text style={styles.sessionCountText}>{sessions.length}</Text>
+              <Text style={styles.sessionCountText}>{visibleSessions.length}</Text>
             </View>
           )}
         </View>
 
         <View style={styles.sessionList}>
           {/* Empty / error states */}
-          {!loading && sessions.length === 0 && !loadError && (
+          {!loading && visibleSessions.length === 0 && !loadError && (
             <View style={styles.emptyState}>
               <Feather name="clock" size={28} color={C.textSecondary} />
               <Text style={styles.emptyTitle}>NO SESSIONS YET</Text>
@@ -293,7 +391,7 @@ export default function HomeScreen() {
           )}
 
           {/* Session cards */}
-          {sessions.map((session) => {
+          {visibleSessions.map((session) => {
             const sport = SPORT_META[session.sport] ?? {
               label: session.sport,
               icon: 'timer-outline',
@@ -913,4 +1011,47 @@ const styles = StyleSheet.create({
     color: C.textPrimary,
   },
   menuItemDanger: { color: C.error },
+
+  // Live session banner
+  liveBanner: {
+    marginHorizontal: 24,
+    marginTop: 24,
+    backgroundColor: C.accentBg,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.accentBorder,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  liveBannerLeft: { flex: 1, gap: 4 },
+  liveBannerTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: C.accent,
+  },
+  liveBannerTag: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 11,
+    letterSpacing: 1.8,
+    color: C.accent,
+    textTransform: 'uppercase',
+  },
+  liveBannerName: {
+    fontFamily: 'BarlowCondensed-Bold',
+    fontSize: 20,
+    letterSpacing: 0.3,
+    color: C.textPrimary,
+  },
+  liveBannerMeta: {
+    fontFamily: 'Barlow-Regular',
+    fontSize: 12,
+    letterSpacing: 1.5,
+    color: C.textSecondary,
+    textTransform: 'uppercase',
+  },
 });
