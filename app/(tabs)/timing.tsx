@@ -25,6 +25,9 @@ import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
 import { useSessionSocket, useSettings } from '@/src/hooks';
 import { takePendingCameraTimestamp } from '@/src/utils';
+import { saveSession, loadSession, clearSession } from '@/src/utils/sessionPersistence';
+import { saveQueue, loadQueue, clearQueue } from '@/src/utils/queuePersistence';
+import type { QueuedCapture } from '@/src/utils/queuePersistence';
 import { AppColors as C } from '@/constants/theme';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -59,12 +62,6 @@ interface PendingCapture {
   capturedAtMs: number;
 }
 
-interface QueuedCapture {
-  capturedAtMs: number; // raw — sent to API; server applies NTP offset
-  displayMs: number; // NTP-corrected — used only for modal display
-  triggerType: 'BUTTON' | 'CAMERA';
-}
-
 // ─── Timing Portal (shown when tab is accessed without an active session) ────
 
 type PortalPhase =
@@ -84,12 +81,65 @@ function TimingPortal() {
       let cancelled = false;
 
       async function detect() {
+        // ── Phase 1: Restore from persisted session (operators AND coordinators) ──
+        // This is the only recovery path for operators, who cannot be discovered
+        // via listSessions(). For coordinators it provides the correct offset_ms,
+        // fixing the pre-existing offset=0 bug.
+        // TODO(offline-v2): Add GET /api/v1/sessions/joined to cover the case where
+        //                    persisted state was cleared (reinstall / storage wipe).
+        try {
+          const persisted = await loadSession();
+          if (persisted && !cancelled) {
+            const state = await getSessionState(token!, persisted.session_code);
+            if (!cancelled) {
+              if (state.session.status === 'ACTIVE') {
+                router.replace({
+                  pathname: '/(tabs)/timing' as never,
+                  params: {
+                    session_id: persisted.session_id,
+                    session_code: persisted.session_code,
+                    session_name: persisted.session_name,
+                    is_coordinator: String(persisted.is_coordinator),
+                    offset_ms: String(persisted.offset_ms),
+                    session_start_ms: String(persisted.session_start_ms),
+                    role: persisted.role,
+                  },
+                });
+                return;
+              }
+
+              if (state.session.status === 'WAITING') {
+                if (!persisted.is_coordinator) {
+                  // Operator: route back to waiting-room so they can reconnect to
+                  // their assigned checkpoint. listSessions() won't find this session
+                  // (it only returns sessions the user created), so this is the only
+                  // recovery path without a GET /api/v1/sessions/joined endpoint.
+                  setPhase({ kind: 'waiting_op', session: state.session, role: persisted.role });
+                  return;
+                }
+                // Coordinator with WAITING session: fall through to Phase 2 (listSessions
+                // will find it and render the OPEN SETUP card).
+              }
+
+              // Session FINISHED or DRAFT while we were away — wipe the stale persisted state.
+              await clearSession();
+            }
+          }
+        } catch {
+          // Network error or session not found — fall through to listSessions fallback.
+        }
+
+        if (cancelled) return;
+
+        // ── Phase 2: Coordinator-only discovery via listSessions (existing logic) ──
         try {
           const list = await listSessions(token!);
           if (cancelled) return;
 
           const active = list.find((s) => s.status === 'ACTIVE');
           if (active) {
+            // No persisted state available — offset_ms defaults to 0 here.
+            // The correct offset will arrive via SESSION_STATE when WS connects.
             router.replace({
               pathname: '/(tabs)/timing' as never,
               params: {
@@ -376,11 +426,10 @@ function TimingContent() {
   const code = session_code ?? '';
   const sessionName = session_name ?? '';
 
-  // Freeze session start on mount — never recalculate from render
-  const offsetMs = Number(offset_ms ?? 0);
-  const sessionStartMs = useRef(
+  const [offsetMs, setOffsetMs] = useState(() => Number(offset_ms ?? 0));
+  const [sessionStartMs, setSessionStartMs] = useState(() =>
     session_start_ms ? Number(session_start_ms) : Date.now() + Number(offset_ms ?? 0),
-  ).current;
+  );
 
   const getCorrectedTimestamp = useCallback(() => Date.now() + offsetMs, [offsetMs]);
 
@@ -412,6 +461,25 @@ function TimingContent() {
   const socket = useSessionSocket(session_id ?? null);
   const { lastMessage, send, status: wsStatus } = socket;
 
+  // ─── Session persistence ──────────────────────────────────────────────────
+
+  // Write session context to AsyncStorage so TimingPortal can restore it after
+  // an app restart. Runs once on mount with the initial values (which may use
+  // offset_ms=0 for coordinators routed from the portal), then updates when
+  // SESSION_STATE arrives with authoritative server values.
+  useEffect(() => {
+    if (!session_id) return;
+    saveSession({
+      session_id,
+      session_code: code,
+      session_name: sessionName,
+      role: role ?? '',
+      offset_ms: offsetMs,
+      session_start_ms: sessionStartMs,
+      is_coordinator: isCoordinator,
+    });
+  }, [session_id, code, sessionName, role, offsetMs, sessionStartMs, isCoordinator]);
+
   const [sessionEnded, setSessionEnded] = useState(false);
   const navigatedRef = useRef(false);
 
@@ -419,15 +487,27 @@ function TimingContent() {
     if (navigatedRef.current) return;
     navigatedRef.current = true;
     setSessionEnded(true);
+    void clearSession();
+    if (session_id) void clearQueue(session_id);
     router.replace({
       pathname: '/(tabs)/results' as never,
       params: { session_code: code },
     });
-  }, [code]);
+  }, [code, session_id]);
 
   useEffect(() => {
-    if (lastMessage?.type === 'SESSION_END') {
+    if (!lastMessage) return;
+
+    if (lastMessage.type === 'SESSION_END') {
       navigateToResults();
+      return;
+    }
+
+    if (lastMessage.type === 'SESSION_STATE') {
+      const { started_at_ms, offset_ms: serverOffset } = lastMessage.payload;
+      // Only overwrite local values with non-null server values (see Concern C6).
+      if (started_at_ms != null) setSessionStartMs(started_at_ms);
+      if (serverOffset != null) setOffsetMs(serverOffset);
     }
   }, [lastMessage, navigateToResults]);
 
@@ -449,8 +529,26 @@ function TimingContent() {
   const [pendingCapture, setPendingCapture] = useState<PendingCapture | null>(null);
   const [assignError, setAssignError] = useState<string | null>(null);
   const [queue, setQueue] = useState<QueuedCapture[]>([]);
+
+  // Restore any captures that survived an app kill while offline.
+  useEffect(() => {
+    if (!session_id) return;
+    loadQueue(session_id).then((stored) => {
+      if (stored.length > 0) setQueue(stored);
+    });
+  }, [session_id]); // mount only
+
+  // Mirror queue state to AsyncStorage so unsent captures survive an app kill.
+  useEffect(() => {
+    if (!session_id) return;
+    void saveQueue(session_id, queue);
+  }, [session_id, queue]);
+
   const [flushing, setFlushing] = useState(false);
-  // competitorId → elapsed ms at capture
+  // TODO(offline-v2): assignedMap is not persisted — after an app restart and recovery,
+  // all competitors appear unassigned even if some already have DB timestamps. This is
+  // display-only (data is on the server). A competitor re-assigned triggers a 422 from
+  // the API. Fix requires GET /api/v1/sessions/:code/checkpoints/:id/assignments.
   const [assignedMap, setAssignedMap] = useState<Map<string, number>>(new Map());
 
   // ─── Offline queue flush ──────────────────────────────────────────────────
