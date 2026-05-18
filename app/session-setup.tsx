@@ -130,7 +130,9 @@ export default function SessionSetupScreen() {
   const [starting, setStarting] = useState(false);
   const [opening, setOpening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const openingRef = useRef(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const endConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -293,16 +295,18 @@ export default function SessionSetupScreen() {
   );
 
   async function handleOpenSession() {
-    if (!token || !session_id) return;
+    if (!token || !session_id || openingRef.current) return;
+    openingRef.current = true;
     setOpening(true);
-    setStartError(null);
+    setOpenError(null);
     try {
       await openSession(token, session_id);
       setIsOpen(true);
     } catch (e) {
-      setStartError(e instanceof SessionError ? e.message : 'Failed to open session. Try again.');
+      setOpenError(e instanceof SessionError ? e.message : 'Failed to open session. Try again.');
     } finally {
       setOpening(false);
+      openingRef.current = false;
     }
   }
 
@@ -523,6 +527,12 @@ export default function SessionSetupScreen() {
             <Text style={styles.startHint}>
               Opens the session so checkpoint devices can connect and sync
             </Text>
+            {openError != null && (
+              <View style={styles.errorBanner}>
+                <Feather name="alert-circle" size={14} color={C.error} />
+                <Text style={styles.errorText}>{openError}</Text>
+              </View>
+            )}
             <TouchableOpacity
               style={[styles.startBtn, opening && styles.startBtnDisabled]}
               onPress={handleOpenSession}
