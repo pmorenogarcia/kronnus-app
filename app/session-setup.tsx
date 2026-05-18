@@ -81,10 +81,11 @@ function getUserIdFromToken(token: string): string {
 export default function SessionSetupScreen() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { session_id, session_code, session_name } = useLocalSearchParams<{
+  const { session_id, session_code, session_name, session_status } = useLocalSearchParams<{
     session_id: string;
     session_code: string;
     session_name: string;
+    session_status: string;
   }>();
 
   const code = session_code ?? '——';
@@ -92,8 +93,11 @@ export default function SessionSetupScreen() {
 
   const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [isOpen, setIsOpen] = useState(session_status === 'WAITING');
+
   // WebSocket + time sync (coordinator syncs automatically on mount)
-  const socket = useSessionSocket(session_id ?? null);
+  const socket = useSessionSocket(isOpen ? (session_id ?? null) : null);
   const { lastMessage, send, status } = socket;
   const { getCorrectedTimestamp, offsetMs } = useTimeSync(socket, userId);
 
