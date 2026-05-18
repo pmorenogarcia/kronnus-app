@@ -23,10 +23,11 @@ import { useAuth } from '@/contexts';
 import {
   addCompetitor as apiAddCompetitor,
   getSessionState,
+  openSession,
   setCheckpointRole,
   SessionError,
 } from '@/src/api';
-import type { CheckpointRole, Competitor } from '@/src/api';
+import type { CheckpointRole, Competitor, SessionStatus } from '@/src/api';
 import { useSessionSocket, useTimeSync } from '@/src/hooks';
 
 const C = {
@@ -81,10 +82,11 @@ function getUserIdFromToken(token: string): string {
 export default function SessionSetupScreen() {
   const insets = useSafeAreaInsets();
   const { token } = useAuth();
-  const { session_id, session_code, session_name } = useLocalSearchParams<{
+  const { session_id, session_code, session_name, session_status } = useLocalSearchParams<{
     session_id: string;
     session_code: string;
     session_name: string;
+    session_status: SessionStatus;
   }>();
 
   const code = session_code ?? '——';
@@ -92,8 +94,10 @@ export default function SessionSetupScreen() {
 
   const userId = useMemo(() => (token ? getUserIdFromToken(token) : ''), [token]);
 
+  const [isOpen, setIsOpen] = useState(session_status === 'WAITING');
+
   // WebSocket + time sync (coordinator syncs automatically on mount)
-  const socket = useSessionSocket(session_id ?? null);
+  const socket = useSessionSocket(isOpen ? (session_id ?? null) : null);
   const { lastMessage, send, status } = socket;
   const { getCorrectedTimestamp, offsetMs } = useTimeSync(socket, userId);
 
@@ -124,8 +128,11 @@ export default function SessionSetupScreen() {
 
   // UI state
   const [starting, setStarting] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const openingRef = useRef(false);
   const [confirmingEnd, setConfirmingEnd] = useState(false);
   const [ending, setEnding] = useState(false);
   const endConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -286,6 +293,22 @@ export default function SessionSetupScreen() {
     },
     [token, code],
   );
+
+  async function handleOpenSession() {
+    if (!token || !session_id || openingRef.current) return;
+    openingRef.current = true;
+    setOpening(true);
+    setOpenError(null);
+    try {
+      await openSession(token, session_id);
+      setIsOpen(true);
+    } catch (e) {
+      setOpenError(e instanceof SessionError ? e.message : 'Failed to open session. Try again.');
+    } finally {
+      setOpening(false);
+      openingRef.current = false;
+    }
+  }
 
   function handleStartSession() {
     if (!canStart) return;
@@ -499,72 +522,103 @@ export default function SessionSetupScreen() {
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 12 }]}>
-        {!canStart && deviceList.length > 0 && !confirmingEnd && (
-          <Text style={styles.startHint}>
-            Assign START + END roles and wait for all devices to sync
-          </Text>
-        )}
-        <TouchableOpacity
-          style={[
-            styles.startBtn,
-            (!canStart || starting || confirmingEnd) && styles.startBtnDisabled,
-          ]}
-          onPress={handleStartSession}
-          activeOpacity={0.85}
-          disabled={!canStart || starting || confirmingEnd}
-        >
-          {starting ? (
-            <ActivityIndicator size="small" color="#0F0F0F" />
-          ) : (
-            <>
-              <Feather
-                name="play"
-                size={18}
-                color={canStart && !confirmingEnd ? '#0F0F0F' : C.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.startBtnText,
-                  (!canStart || confirmingEnd) && styles.startBtnTextDisabled,
-                ]}
-              >
-                START SESSION
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {!confirmingEnd ? (
-          <TouchableOpacity
-            style={styles.endBtn}
-            onPress={handleEndSessionPress}
-            activeOpacity={0.7}
-          >
-            <Feather name="x-circle" size={13} color={C.error} />
-            <Text style={styles.endBtnText}>END SESSION</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.endConfirmRow}>
+        {!isOpen ? (
+          <>
+            <Text style={styles.startHint}>
+              Opens the session so checkpoint devices can connect and sync
+            </Text>
+            {openError != null && (
+              <View style={styles.errorBanner}>
+                <Feather name="alert-circle" size={14} color={C.error} />
+                <Text style={styles.errorText}>{openError}</Text>
+              </View>
+            )}
             <TouchableOpacity
-              style={styles.endConfirmBtn}
-              onPress={handleEndSessionPress}
-              activeOpacity={0.8}
-              disabled={ending}
+              style={[styles.startBtn, opening && styles.startBtnDisabled]}
+              onPress={handleOpenSession}
+              activeOpacity={0.85}
+              disabled={opening}
             >
-              {ending ? (
-                <ActivityIndicator size="small" color={C.error} />
+              {opening ? (
+                <ActivityIndicator size="small" color="#0F0F0F" />
               ) : (
-                <Text style={styles.endConfirmBtnText}>CONFIRM END</Text>
+                <>
+                  <Feather name="play" size={18} color="#0F0F0F" />
+                  <Text style={styles.startBtnText}>START SYNC</Text>
+                </>
               )}
             </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            {!canStart && deviceList.length > 0 && !confirmingEnd && (
+              <Text style={styles.startHint}>
+                Assign START + END roles and wait for all devices to sync
+              </Text>
+            )}
             <TouchableOpacity
-              style={styles.endCancelBtn}
-              onPress={cancelEndSession}
-              activeOpacity={0.7}
+              style={[
+                styles.startBtn,
+                (!canStart || starting || confirmingEnd) && styles.startBtnDisabled,
+              ]}
+              onPress={handleStartSession}
+              activeOpacity={0.85}
+              disabled={!canStart || starting || confirmingEnd}
             >
-              <Text style={styles.endCancelBtnText}>CANCEL</Text>
+              {starting ? (
+                <ActivityIndicator size="small" color="#0F0F0F" />
+              ) : (
+                <>
+                  <Feather
+                    name="play"
+                    size={18}
+                    color={canStart && !confirmingEnd ? '#0F0F0F' : C.textSecondary}
+                  />
+                  <Text
+                    style={[
+                      styles.startBtnText,
+                      (!canStart || confirmingEnd) && styles.startBtnTextDisabled,
+                    ]}
+                  >
+                    START SESSION
+                  </Text>
+                </>
+              )}
             </TouchableOpacity>
-          </View>
+
+            {!confirmingEnd ? (
+              <TouchableOpacity
+                style={styles.endBtn}
+                onPress={handleEndSessionPress}
+                activeOpacity={0.7}
+              >
+                <Feather name="x-circle" size={13} color={C.error} />
+                <Text style={styles.endBtnText}>END SESSION</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.endConfirmRow}>
+                <TouchableOpacity
+                  style={styles.endConfirmBtn}
+                  onPress={handleEndSessionPress}
+                  activeOpacity={0.8}
+                  disabled={ending}
+                >
+                  {ending ? (
+                    <ActivityIndicator size="small" color={C.error} />
+                  ) : (
+                    <Text style={styles.endConfirmBtnText}>CONFIRM END</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.endCancelBtn}
+                  onPress={cancelEndSession}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.endCancelBtnText}>CANCEL</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
       </View>
 

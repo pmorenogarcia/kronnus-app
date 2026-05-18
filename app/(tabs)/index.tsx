@@ -207,6 +207,7 @@ export default function HomeScreen() {
             session_id: session.id,
             session_code: session.session_code,
             session_name: session.name,
+            session_status: session.status,
           },
         });
         break;
