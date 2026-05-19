@@ -319,6 +319,7 @@ export default function CreateSessionScreen() {
           session_code: opened.session_code,
           session_name: opened.name,
           session_sport: opened.sport,
+          session_status: opened.status,
         },
       });
     } catch (e) {
