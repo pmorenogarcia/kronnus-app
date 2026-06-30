@@ -34,10 +34,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (err) {
         if (err instanceof AuthError && (err.statusCode === 401 || err.statusCode === 403)) {
+          // Genuinely invalid/expired credentials — sign out for real.
           await auth().signOut();
+          setToken(null);
+          setUser(null);
         }
-        setToken(null);
-        setUser(null);
+        // Network failures or backend errors (e.g. 5xx) are transient — keep the
+        // Firebase session and token so the user isn't bounced to the login screen
+        // by a server hiccup. `user` stays null until the next token refresh
+        // succeeds in fetching the profile.
       } finally {
         setIsLoading(false);
       }
