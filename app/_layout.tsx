@@ -23,10 +23,11 @@ function RootNavigator() {
   useEffect(() => {
     if (isLoading) return;
     const inTabsGroup = firstSegment === '(tabs)';
+    const inAuthScreen = firstSegment === 'login' || firstSegment === 'register';
 
     if (!isAuthenticated && inTabsGroup) {
       router.replace('/login');
-    } else if (isAuthenticated && firstSegment === 'login') {
+    } else if (isAuthenticated && inAuthScreen) {
       router.replace('/(tabs)');
     }
   }, [isAuthenticated, isLoading, firstSegment]);
