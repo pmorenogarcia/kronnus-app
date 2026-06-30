@@ -1,8 +1,6 @@
 import { User } from '@/types';
-import { deleteItem, getItem, setItem } from '@/src/utils/storage';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
-const AUTH_TOKEN_KEY = 'auth_token';
 
 // ─── Error classes ───────────────────────────────────────────────────────────
 
@@ -61,32 +59,6 @@ export interface Session {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
-export async function loginUser(identifier: string, password: string): Promise<{ token: string }> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password }),
-    });
-  } catch {
-    throw new AuthError('Could not connect to the server. Check your connection and try again.');
-  }
-
-  if (!response.ok) {
-    throw new AuthError(
-      response.status === 400 || response.status === 401
-        ? 'Invalid email/username or password.'
-        : 'Something went wrong. Please try again.',
-      response.status,
-    );
-  }
-
-  const data = (await response.json()) as { token: string };
-  await setItem(AUTH_TOKEN_KEY, data.token);
-  return { token: data.token };
-}
-
 export async function getMe(token: string): Promise<User> {
   let response: Response;
   try {
@@ -103,14 +75,6 @@ export async function getMe(token: string): Promise<User> {
 
   const data = (await response.json()) as { id: string; email: string; username?: string };
   return { id: data.id, email: data.email, username: data.username };
-}
-
-export async function getStoredToken(): Promise<string | null> {
-  return getItem(AUTH_TOKEN_KEY);
-}
-
-export async function clearStoredToken(): Promise<void> {
-  await deleteItem(AUTH_TOKEN_KEY);
 }
 
 // ─── Sessions ────────────────────────────────────────────────────────────────

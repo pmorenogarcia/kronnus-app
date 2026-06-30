@@ -19,6 +19,23 @@ Companion backend: [`../kronnus-api`](../kronnus-api) (Go + Fiber).
 
 ---
 
+## Development
+
+> ⚠️ **Expo Go is no longer supported.** `@react-native-firebase` requires a native build.
+> Use an EAS development client instead:
+>
+> ```bash
+> eas build --profile development --platform android
+> ```
+>
+> Install the resulting `.apk` on your device or emulator, then start Metro:
+>
+> ```bash
+> npx expo start --dev-client
+> ```
+
+---
+
 ## Running locally
 
 ### 1. Start the backend

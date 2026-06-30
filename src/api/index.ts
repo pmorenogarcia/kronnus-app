@@ -1,11 +1,8 @@
-export { RegistrationError, registerUser, UpdateProfileError, updateMe } from './auth';
+export { UpdateProfileError, updateMe } from './auth';
 export {
   API_BASE_URL,
   AuthError,
-  loginUser,
   getMe,
-  getStoredToken,
-  clearStoredToken,
   SessionError,
   createSession,
   openSession,
