@@ -3,6 +3,9 @@ import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useRef, useState } from 'react';
+
+import { updateMe } from '@/src/api';
+import { useAuth } from '@/contexts';
 import {
   ActivityIndicator,
   Image,
@@ -39,6 +42,7 @@ interface FieldErrors {
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const { updateUser } = useAuth();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -118,6 +122,13 @@ export default function RegisterScreen() {
     try {
       const credential = await auth().createUserWithEmailAndPassword(email.trim(), password);
       await credential.user.updateProfile({ displayName: username.trim() });
+      const idToken = await credential.user.getIdToken();
+      try {
+        const updatedUser = await updateMe(idToken, { username: username.trim() });
+        updateUser(updatedUser);
+      } catch {
+        // Non-critical: user can update username later via edit-profile
+      }
       router.replace('/(tabs)');
     } catch (err: unknown) {
       const code = (err as { code?: string }).code;
@@ -126,7 +137,7 @@ export default function RegisterScreen() {
           setFieldError('email', 'An account with this email already exists.');
           break;
         case 'auth/weak-password':
-          setFieldError('password', 'Password must be at least 6 characters.');
+          setFieldError('password', 'Password must be at least 8 characters.');
           break;
         case 'auth/invalid-email':
           setFieldError('email', 'Please enter a valid email address.');

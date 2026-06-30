@@ -80,6 +80,27 @@ it('clears token and user when Firebase user is null', async () => {
   expect(result.current.isAuthenticated).toBe(false);
 });
 
+it('calls auth().signOut() and clears state when getMe rejects with 401', async () => {
+  const fakeFirebaseUser = {
+    getIdToken: jest.fn().mockResolvedValue('firebase-id-token'),
+  };
+  const { AuthError } = jest.requireMock('@/src/api') as {
+    AuthError: new (msg: string, code: number) => Error & { statusCode: number };
+  };
+  mockGetMe.mockRejectedValue(new AuthError('unauthorized', 401));
+
+  const { result } = await renderHook(() => useAuth(), { wrapper });
+
+  await act(async () => {
+    await capturedListener!(fakeFirebaseUser);
+  });
+
+  expect(mockSignOut).toHaveBeenCalled();
+  expect(result.current.token).toBeNull();
+  expect(result.current.user).toBeNull();
+  expect(result.current.isLoading).toBe(false);
+});
+
 it('signOut calls auth().signOut()', async () => {
   const { result } = await renderHook(() => useAuth(), { wrapper });
 
