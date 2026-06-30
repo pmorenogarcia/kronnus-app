@@ -1,3 +1,4 @@
+import auth from '@react-native-firebase/auth';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,9 +17,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/contexts';
-import { loginUser } from '@/src/api';
-
 const C = {
   bg: '#1C1C1C',
   accent: '#EDD83D',
@@ -32,29 +30,42 @@ const C = {
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn } = useAuth();
-  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [identifierFocused, setIdentifierFocused] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignIn() {
-    if (!identifier.trim() || !password.trim()) {
-      setError('Please enter your email/username and password.');
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter your email and password.');
       return;
     }
 
     setError(null);
     setLoading(true);
     try {
-      const { token } = await loginUser(identifier.trim(), password);
-      signIn(token);
+      await auth().signInWithEmailAndPassword(email.trim(), password);
       router.replace('/(tabs)');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      switch (code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          setError('Invalid email or password.');
+          break;
+        case 'auth/too-many-requests':
+          setError('Too many attempts. Try again later.');
+          break;
+        case 'auth/network-request-failed':
+          setError('No connection. Check your network.');
+          break;
+        default:
+          setError('Login failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -92,17 +103,17 @@ export default function LoginScreen() {
         {/* Form */}
         <View style={styles.form}>
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>EMAIL OR USERNAME</Text>
-            <View style={[styles.inputWrapper, identifierFocused && styles.inputWrapperFocused]}>
+            <Text style={styles.label}>EMAIL</Text>
+            <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
               <Feather name="mail" size={18} color={C.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="joao.duarte@email.com"
                 placeholderTextColor={C.textMuted}
-                value={identifier}
-                onChangeText={setIdentifier}
-                onFocus={() => setIdentifierFocused(true)}
-                onBlur={() => setIdentifierFocused(false)}
+                value={email}
+                onChangeText={setEmail}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoCorrect={false}
