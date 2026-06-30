@@ -45,3 +45,8 @@ app-example
 # Claude Code memory (tool metadata, not project code)
 memory/
 .mcp.json
+.claude/
+
+# Firebase config (contains credentials — never commit)
+google-services.json
+GoogleService-Info.plist
