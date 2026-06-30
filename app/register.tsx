@@ -1,3 +1,4 @@
+import auth from '@react-native-firebase/auth';
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -15,9 +16,6 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { useAuth } from '@/contexts';
-import { RegistrationError, registerUser } from '@/src/api';
 
 const C = {
   bg: '#1C1C1C',
@@ -41,7 +39,6 @@ interface FieldErrors {
 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn } = useAuth();
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -119,22 +116,23 @@ export default function RegisterScreen() {
 
     setLoading(true);
     try {
-      const { token } = await registerUser(username.trim(), email.trim(), password);
-      signIn(token);
+      const credential = await auth().createUserWithEmailAndPassword(email.trim(), password);
+      await credential.user.updateProfile({ displayName: username.trim() });
       router.replace('/(tabs)');
-    } catch (err) {
-      if (err instanceof RegistrationError) {
-        if (err.field === 'username') {
-          setFieldError('username', 'Username already taken.');
-        } else if (err.field === 'email') {
-          setFieldError('email', 'Email already in use.');
-        } else {
-          setGlobalError(err.message);
-        }
-      } else {
-        setGlobalError(
-          err instanceof Error ? err.message : 'Something went wrong. Please try again.',
-        );
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code;
+      switch (code) {
+        case 'auth/email-already-in-use':
+          setFieldError('email', 'An account with this email already exists.');
+          break;
+        case 'auth/weak-password':
+          setFieldError('password', 'Password must be at least 6 characters.');
+          break;
+        case 'auth/invalid-email':
+          setFieldError('email', 'Please enter a valid email address.');
+          break;
+        default:
+          setGlobalError('Registration failed. Please try again.');
       }
     } finally {
       setLoading(false);
