@@ -96,7 +96,7 @@ function TimingPortal() {
         try {
           const persisted = await loadSession();
           if (persisted && !cancelled) {
-            const state = await getSessionState(token!, persisted.session_code);
+            const state = await getSessionState(persisted.session_code);
             if (!cancelled) {
               if (state.session.status === 'ACTIVE') {
                 router.replace({
@@ -139,7 +139,7 @@ function TimingPortal() {
 
         // ── Phase 2: Coordinator-only discovery via listSessions (existing logic) ──
         try {
-          const list = await listSessions(token!);
+          const list = await listSessions();
           if (cancelled) return;
 
           const active = list.find((s) => s.status === 'ACTIVE');
@@ -400,12 +400,10 @@ function TimingContent() {
       // since listSessions only returns sessions the user created.
       const checkActive =
         is_coordinator === 'true'
-          ? listSessions(token).then((list) =>
+          ? listSessions().then((list) =>
               list.some((s) => s.id === session_id && s.status === 'ACTIVE'),
             )
-          : getSessionState(token, session_code ?? '').then(
-              (state) => state.session.status === 'ACTIVE',
-            );
+          : getSessionState(session_code ?? '').then((state) => state.session.status === 'ACTIVE');
 
       checkActive
         .then((isActive) => {
@@ -452,7 +450,7 @@ function TimingContent() {
   useEffect(() => {
     if (competitorsParam || !token || !code) return;
     let cancelled = false;
-    listCompetitors(token, code)
+    listCompetitors(code)
       .then((list) => {
         if (!cancelled) setCompetitors(list);
       })
@@ -571,7 +569,7 @@ function TimingContent() {
 
     const item = queue[0];
     setFlushing(true);
-    captureTimestamp(token, code, item.capturedAtMs, item.triggerType)
+    captureTimestamp(code, item.capturedAtMs, item.triggerType)
       .then((ts) => {
         setQueue((prev) => prev.slice(1));
         openModal({ timestamp: ts, capturedAtMs: item.displayMs });
@@ -682,7 +680,7 @@ function TimingContent() {
     if (!token) return;
 
     try {
-      const ts = await captureTimestamp(token, code, rawMs);
+      const ts = await captureTimestamp(code, rawMs);
       openModal({ timestamp: ts, capturedAtMs: displayMs });
     } catch {
       setQueue((prev) => [...prev, { capturedAtMs: rawMs, displayMs, triggerType: 'BUTTON' }]);
@@ -695,7 +693,7 @@ function TimingContent() {
     if (!token || !pendingCapture) return;
     setAssignError(null);
     try {
-      await assignCompetitor(token, code, pendingCapture.timestamp.id, competitorId);
+      await assignCompetitor(code, pendingCapture.timestamp.id, competitorId);
       const elapsed = pendingCapture.capturedAtMs - sessionStartMs;
       setAssignedMap((prev) => new Map(prev).set(competitorId, elapsed));
       closeModal();

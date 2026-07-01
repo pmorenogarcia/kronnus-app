@@ -26,7 +26,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (firebaseUser) {
           const idToken = await firebaseUser.getIdToken();
           setToken(idToken);
-          const profile = await getMe(idToken);
+          // getMe() re-fetches its own token via getToken() rather than using
+          // idToken above — by the time onIdTokenChanged fires, currentUser
+          // already reflects firebaseUser, so this returns the same token.
+          const profile = await getMe();
           setUser(profile);
         } else {
           setToken(null);

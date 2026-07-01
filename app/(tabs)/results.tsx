@@ -151,15 +151,14 @@ export default function ResultsScreen() {
 
   useEffect(() => {
     if (!token || !code) return;
-    const t = token;
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     async function load() {
       try {
         const [{ results: list }, stateResp] = await Promise.all([
-          getResults(t, code),
-          getSessionState(t, code),
+          getResults(code),
+          getSessionState(code),
         ]);
         if (cancelled) return;
         setResults(list);

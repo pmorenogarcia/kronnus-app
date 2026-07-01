@@ -113,7 +113,7 @@ export default function HomeScreen() {
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       try {
-        const list = await listSessions(token);
+        const list = await listSessions();
         setSessions(list);
         setLoadError(false);
       } catch {
@@ -146,7 +146,7 @@ export default function HomeScreen() {
             setLiveSession(null);
             return;
           }
-          const state = await getSessionState(token!, persisted.session_code);
+          const state = await getSessionState(persisted.session_code);
           if (cancelled) return;
           if (state.session.status === 'ACTIVE') {
             setLiveSession(persisted);
@@ -235,7 +235,7 @@ export default function HomeScreen() {
     setDeleteState({ sessionId, phase: 'deleting' });
     setSessions((s) => s.filter((x) => x.id !== sessionId));
     try {
-      await deleteSession(token, sessionId);
+      await deleteSession(sessionId);
       setDeleteState(null);
     } catch (e) {
       setSessions(snapshot);

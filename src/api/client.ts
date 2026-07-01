@@ -1,3 +1,4 @@
+import { getToken } from '@/src/lib/auth';
 import { User } from '@/types';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
@@ -59,7 +60,10 @@ export interface Session {
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
-export async function getMe(token: string): Promise<User> {
+export async function getMe(): Promise<User> {
+  const token = await getToken();
+  if (!token) throw new AuthError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/me`, {
@@ -79,7 +83,10 @@ export async function getMe(token: string): Promise<User> {
 
 // ─── Sessions ────────────────────────────────────────────────────────────────
 
-export async function createSession(token: string, input: CreateSessionInput): Promise<Session> {
+export async function createSession(input: CreateSessionInput): Promise<Session> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions`, {
@@ -106,7 +113,10 @@ export async function createSession(token: string, input: CreateSessionInput): P
   return (await response.json()) as Session;
 }
 
-export async function openSession(token: string, sessionId: string): Promise<Session> {
+export async function openSession(sessionId: string): Promise<Session> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/open`, {
@@ -124,7 +134,10 @@ export async function openSession(token: string, sessionId: string): Promise<Ses
   return (await response.json()) as Session;
 }
 
-export async function listSessions(token: string): Promise<Session[]> {
+export async function listSessions(): Promise<Session[]> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions`, {
@@ -139,7 +152,10 @@ export async function listSessions(token: string): Promise<Session[]> {
   return (await response.json()) as Session[];
 }
 
-export async function startSession(token: string, sessionId: string): Promise<Session> {
+export async function startSession(sessionId: string): Promise<Session> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}/start`, {
@@ -156,10 +172,12 @@ export async function startSession(token: string, sessionId: string): Promise<Se
 }
 
 export async function joinSession(
-  token: string,
   code: string,
   role: CheckpointRole,
 ): Promise<JoinSessionResponse> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/join`, {
@@ -211,11 +229,13 @@ export interface SessionStateResponse {
 }
 
 export async function setCheckpointRole(
-  token: string,
   sessionCode: string,
   userId: string,
   role: CheckpointRole,
 ): Promise<void> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(
@@ -238,11 +258,13 @@ export async function setCheckpointRole(
 }
 
 export async function addCompetitor(
-  token: string,
   sessionCode: string,
   displayName: string,
   bibNumber?: string,
 ): Promise<Competitor> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/competitors`, {
@@ -262,7 +284,10 @@ export async function addCompetitor(
   return (await response.json()) as Competitor;
 }
 
-export async function listCompetitors(token: string, sessionCode: string): Promise<Competitor[]> {
+export async function listCompetitors(sessionCode: string): Promise<Competitor[]> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/competitors`, {
@@ -277,10 +302,10 @@ export async function listCompetitors(token: string, sessionCode: string): Promi
   return (await response.json()) as Competitor[];
 }
 
-export async function getSessionState(
-  token: string,
-  sessionCode: string,
-): Promise<SessionStateResponse> {
+export async function getSessionState(sessionCode: string): Promise<SessionStateResponse> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/state`, {
@@ -295,7 +320,10 @@ export async function getSessionState(
   return (await response.json()) as SessionStateResponse;
 }
 
-export async function deleteSession(token: string, sessionId: string): Promise<void> {
+export async function deleteSession(sessionId: string): Promise<void> {
+  const token = await getToken();
+  if (!token) throw new SessionError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionId}`, {

@@ -122,9 +122,10 @@ export default function RegisterScreen() {
     try {
       const credential = await auth().createUserWithEmailAndPassword(email.trim(), password);
       await credential.user.updateProfile({ displayName: username.trim() });
-      const idToken = await credential.user.getIdToken();
       try {
-        const updatedUser = await updateMe(idToken, { username: username.trim() });
+        // updateMe() sources its token via getToken() -> auth().currentUser,
+        // which Firebase already set to credential.user by this point.
+        const updatedUser = await updateMe({ username: username.trim() });
         updateUser(updatedUser);
       } catch {
         // Non-critical: user can update username later via edit-profile

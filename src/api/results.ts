@@ -1,3 +1,5 @@
+import { getToken } from '@/src/lib/auth';
+
 import { API_BASE_URL } from './client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -23,7 +25,10 @@ export interface ResultsResponse {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export async function getResults(token: string, sessionCode: string): Promise<ResultsResponse> {
+export async function getResults(sessionCode: string): Promise<ResultsResponse> {
+  const token = await getToken();
+  if (!token) throw new Error('Not signed in.');
+
   const res = await fetch(`${API_BASE_URL}/api/v1/sessions/${sessionCode}/results`, {
     headers: { Authorization: `Bearer ${token}` },
   });

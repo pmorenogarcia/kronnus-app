@@ -64,7 +64,7 @@ it('sets token and user when Firebase user is present', async () => {
   expect(result.current.token).toBe('firebase-id-token');
   expect(result.current.user).toEqual({ id: 'u1', email: 'a@b.com', username: 'tester' });
   expect(result.current.isAuthenticated).toBe(true);
-  expect(mockGetMe).toHaveBeenCalledWith('firebase-id-token');
+  expect(mockGetMe).toHaveBeenCalledWith();
 });
 
 it('clears token and user when Firebase user is null', async () => {

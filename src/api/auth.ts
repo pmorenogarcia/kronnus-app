@@ -1,3 +1,4 @@
+import { getToken } from '@/src/lib/auth';
 import type { User } from '@/types';
 
 import { API_BASE_URL } from './client';
@@ -14,10 +15,10 @@ export class UpdateProfileError extends Error {
   }
 }
 
-export async function updateMe(
-  token: string,
-  updates: { username?: string; email?: string },
-): Promise<User> {
+export async function updateMe(updates: { username?: string; email?: string }): Promise<User> {
+  const token = await getToken();
+  if (!token) throw new UpdateProfileError('Not signed in.', 401);
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}/api/v1/me`, {

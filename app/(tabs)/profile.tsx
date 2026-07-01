@@ -44,7 +44,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       if (!token) return;
-      listSessions(token)
+      listSessions()
         .then((list) => setSessionCount(list.length))
         .catch(() => {});
     }, [token]),
