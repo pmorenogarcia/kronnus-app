@@ -29,7 +29,7 @@ is the React Native + Expo frontend. The companion backend lives in `../kronnus-
 - Time sync: device sends ping to server, calculates round-trip offset (NTP-like)
 - NTP offset is applied **server-side** — the app sends raw `Date.now()` timestamps;
   `service.go` adds `clock_offset_ms` from the checkpoints table to produce `corrected_at`
-- Precision target: ~10–20ms accuracy (to be measured and documented honestly for academic purposes)
+- Precision target: ~10–20ms accuracy (measure and document honestly — this is a real product claim, not just a benchmark)
 
 ## API Layer Conventions
 
@@ -67,14 +67,18 @@ is the React Native + Expo frontend. The companion backend lives in `../kronnus-
 - Issue hierarchy: EPIC → TASK
 - Milestones: Architecture & Setup → Time Sync Core → Mobile App → Backend → Integration & Testing → Documentation & Thesis
 
-## Academic Context
+## Product Context
 
-This is a Bachelor's Final Project at UOC (Universitat Oberta de Catalunya).
+Kronnus started as a Bachelor's Final Project at UOC but is now being developed toward a
+commercial release on Google Play and the App Store, with monetization via ads and/or
+in-app purchases.
 
-- The supervisor will review GitHub history — keep commits clean and meaningful
-- Timing precision limitations must be documented honestly, not glossed over
-- The project must demonstrate: cross-platform mobile development, sensor integration, real-time networking
+- Keep commit history clean and meaningful — it's still a portfolio artifact, now also a product history
+- Timing precision limitations must be documented honestly, not glossed over — it's a real product claim now, not just an academic one
 - All documentation and code comments must be written in English
+- Treat production data (user accounts, sessions) as real user data from now on, not test fixtures
+- Anything touching payments, ads SDKs, or personal data (analytics, ad IDs, purchase receipts) has compliance implications (Play/App Store policies, GDPR) — flag these explicitly rather than assuming a quick implementation is fine
+- Store distribution constraints now matter: permissions (camera, notifications), app privacy labels/data safety forms, and ad SDK/consent requirements should be considered when adding features
 
 ## Key Domain Concepts
 
