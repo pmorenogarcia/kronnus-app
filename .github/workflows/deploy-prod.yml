@@ -46,15 +46,13 @@ jobs:
           eas build
           --profile production
           --platform ${{ github.event.inputs.platform }}
+          --environment production
           --non-interactive
-        env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}
 
       - name: Publish OTA update (production channel)
         run: >
           eas update
           --branch production
           --message "Production release ${{ github.sha }}"
+          --environment production
           --non-interactive
-        env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PROD }}

@@ -45,9 +45,7 @@ jobs:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
       - name: Build
-        run: eas build --profile preview --platform android --non-interactive
-        env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PREPROD }}
+        run: eas build --profile preview --platform android --environment preview --non-interactive
 
   update:
     name: EAS Update (preview channel)
@@ -69,6 +67,5 @@ jobs:
           eas update
           --branch preview
           --message "${{ github.event.head_commit.message || 'Manual deploy' }}"
+          --environment preview
           --non-interactive
-        env:
-          EXPO_PUBLIC_API_URL: ${{ secrets.EXPO_PUBLIC_API_URL_PREPROD }}
