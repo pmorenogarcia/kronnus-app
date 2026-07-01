@@ -306,12 +306,12 @@ export default function CreateSessionScreen() {
     if (!token || !validate()) return;
     setLoadingContinue(true);
     try {
-      const session = await createSession(token, {
+      const session = await createSession({
         name: name.trim(),
         sport,
         session_date: date.toISOString(),
       });
-      const opened = await openSession(token, session.id);
+      const opened = await openSession(session.id);
       router.replace({
         pathname: '/session-setup' as any,
         params: {
@@ -333,7 +333,7 @@ export default function CreateSessionScreen() {
     if (!token || !validate()) return;
     setLoadingDraft(true);
     try {
-      await createSession(token, {
+      await createSession({
         name: name.trim(),
         sport,
         session_date: date.toISOString(),

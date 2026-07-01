@@ -1,3 +1,5 @@
+import { getToken } from '@/src/lib/auth';
+
 import { API_BASE_URL } from './client';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -30,9 +32,11 @@ export class TimestampError extends Error {
 async function apiRequest<T>(
   method: 'GET' | 'POST' | 'PUT',
   path: string,
-  token: string,
   body?: unknown,
 ): Promise<T> {
+  const token = await getToken();
+  if (!token) throw new TimestampError('Not signed in.', 401);
+
   const res = await fetch(`${API_BASE_URL}${path}`, {
     method,
     headers: {
@@ -57,19 +61,17 @@ async function apiRequest<T>(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export function captureTimestamp(
-  token: string,
   sessionCode: string,
   capturedAtMs: number,
   triggerType: 'BUTTON' | 'CAMERA' = 'BUTTON',
 ): Promise<Timestamp> {
-  return apiRequest<Timestamp>('POST', `/api/v1/sessions/${sessionCode}/timestamps`, token, {
+  return apiRequest<Timestamp>('POST', `/api/v1/sessions/${sessionCode}/timestamps`, {
     captured_at_ms: capturedAtMs,
     trigger_type: triggerType,
   });
 }
 
 export function assignCompetitor(
-  token: string,
   sessionCode: string,
   timestampId: string,
   competitorId: string,
@@ -77,11 +79,10 @@ export function assignCompetitor(
   return apiRequest<Timestamp>(
     'PUT',
     `/api/v1/sessions/${sessionCode}/timestamps/${timestampId}/assign`,
-    token,
     { competitor_id: competitorId },
   );
 }
 
-export function listTimestamps(token: string, sessionCode: string): Promise<Timestamp[]> {
-  return apiRequest<Timestamp[]>('GET', `/api/v1/sessions/${sessionCode}/timestamps`, token);
+export function listTimestamps(sessionCode: string): Promise<Timestamp[]> {
+  return apiRequest<Timestamp[]>('GET', `/api/v1/sessions/${sessionCode}/timestamps`);
 }

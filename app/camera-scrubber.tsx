@@ -22,7 +22,6 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import Slider from '@react-native-community/slider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useAuth } from '@/contexts';
 import { captureTimestamp } from '@/src/api/timestamps';
 import { formatElapsedMs, setPendingCameraTimestamp } from '@/src/utils';
 
@@ -56,7 +55,6 @@ interface ScrubViewProps {
   ntpOffsetMs: number;
   sessionStartMs: number;
   sessionCode: string;
-  token: string;
   onRetake: () => void;
   onClose: () => void;
 }
@@ -66,7 +64,6 @@ function ScrubView({
   ntpOffsetMs,
   sessionStartMs,
   sessionCode,
-  token,
   onRetake,
   onClose,
 }: ScrubViewProps) {
@@ -109,7 +106,7 @@ function ScrubView({
     const snapshotMs = seekMs;
     const correctedMs = clip.startMs + snapshotMs; // raw — server applies NTP offset
     try {
-      const ts = await captureTimestamp(token, sessionCode, correctedMs, 'CAMERA');
+      const ts = await captureTimestamp(sessionCode, correctedMs, 'CAMERA');
       const displayMs = clip.startMs + snapshotMs + ntpOffsetMs;
       setPendingCameraTimestamp({ timestamp: ts, capturedAtMs: displayMs });
       onClose(); // navigate back only on success
@@ -193,7 +190,6 @@ function ScrubView({
 
 export default function CameraScrubberScreen() {
   const insets = useSafeAreaInsets();
-  const { token } = useAuth();
 
   const { session_code, ntp_offset_ms, session_start_ms } = useLocalSearchParams<{
     session_code: string;
@@ -282,7 +278,6 @@ export default function CameraScrubberScreen() {
           ntpOffsetMs={ntpOffsetMs}
           sessionStartMs={sessionStartMs}
           sessionCode={session_code}
-          token={token ?? ''}
           onRetake={handleRetake}
           onClose={() => router.back()}
         />

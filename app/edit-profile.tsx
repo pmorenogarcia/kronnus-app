@@ -87,7 +87,7 @@ export default function EditProfileScreen() {
 
     setLoading(true);
     try {
-      const updated = await updateMe(token, {
+      const updated = await updateMe({
         username: username.trim(),
         email: email.trim(),
       });

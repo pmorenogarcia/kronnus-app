@@ -1,4 +1,49 @@
+// useSessionSocket imports @react-native-firebase/auth transitively (via
+// src/lib/auth's getToken) — stub it so this test file doesn't need the
+// native module, same as auth-context.test.tsx.
+import { connectWithFreshToken } from '../src/hooks/useSessionSocket';
 import { computeBackoffMs } from '../src/ws/backoff';
+
+jest.mock('@react-native-firebase/auth', () => () => ({ currentUser: null }));
+
+// ─── connectWithFreshToken — every (re)connect attempt fetches its own token ──
+
+describe('connectWithFreshToken', () => {
+  it('connects using the token returned by getToken', async () => {
+    const connect = jest.fn();
+    const onNoToken = jest.fn();
+    const getToken = jest.fn().mockResolvedValue('fresh-token');
+
+    await connectWithFreshToken('session-1', connect, onNoToken, getToken);
+
+    expect(connect).toHaveBeenCalledWith('session-1', 'fresh-token');
+    expect(onNoToken).not.toHaveBeenCalled();
+  });
+
+  it('calls onNoToken and does not connect when signed out', async () => {
+    const connect = jest.fn();
+    const onNoToken = jest.fn();
+    const getToken = jest.fn().mockResolvedValue(null);
+
+    await connectWithFreshToken('session-1', connect, onNoToken, getToken);
+
+    expect(connect).not.toHaveBeenCalled();
+    expect(onNoToken).toHaveBeenCalled();
+  });
+
+  it('fetches a new token on every call instead of reusing a previous one', async () => {
+    const connect = jest.fn();
+    const onNoToken = jest.fn();
+    const getToken = jest.fn().mockResolvedValueOnce('token-1').mockResolvedValueOnce('token-2');
+
+    await connectWithFreshToken('session-1', connect, onNoToken, getToken);
+    await connectWithFreshToken('session-1', connect, onNoToken, getToken);
+
+    expect(connect).toHaveBeenNthCalledWith(1, 'session-1', 'token-1');
+    expect(connect).toHaveBeenNthCalledWith(2, 'session-1', 'token-2');
+    expect(getToken).toHaveBeenCalledTimes(2);
+  });
+});
 
 // ─── Pure backoff function ────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useAuth } from '@/contexts';
+import { getToken } from '@/src/lib/auth';
 import { API_BASE_URL } from '@/src/api/client';
 import { computeBackoffMs } from '@/src/ws/backoff';
 import type { WsMessage } from '@/src/ws/messages';
@@ -10,6 +10,32 @@ const MAX_ATTEMPTS = 120;
 function toWsUrl(sessionId: string, token: string): string {
   const base = API_BASE_URL.replace(/^https/, 'wss').replace(/^http(?!s)/, 'ws');
   return `${base}/api/v1/sessions/${sessionId}/ws?token=${encodeURIComponent(token)}`;
+}
+
+// WS token-refresh decision (issue #69): the backend validates the Firebase
+// ID token only once, during the HTTP upgrade handshake (see UpgradeCheck in
+// kronnus-api/internal/handler/ws_handler.go) — it never re-verifies the
+// token per message. So a healthy, already-open connection does NOT need to
+// be torn down just because the underlying ID token refreshes in the
+// background during a long timing session (2–4h, longer than the 1h token
+// lifetime). What DOES matter: every connection attempt — the initial one
+// and every automatic reconnect after a drop — must present a token that is
+// valid *at that moment*, since a drop can happen at any point in a long
+// session, potentially after the original token has expired. That's why
+// reconnects call getToken() fresh instead of reusing the token the
+// connection was first opened with.
+export async function connectWithFreshToken(
+  sessionId: string,
+  connect: (id: string, token: string) => void,
+  onNoToken: () => void,
+  fetchToken: () => Promise<string | null> = getToken,
+): Promise<void> {
+  const token = await fetchToken();
+  if (!token) {
+    onNoToken();
+    return;
+  }
+  connect(sessionId, token);
 }
 
 export type SocketStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -25,8 +51,6 @@ export interface UseSessionSocketReturn {
 }
 
 export function useSessionSocket(sessionId: string | null): UseSessionSocketReturn {
-  const { token } = useAuth();
-
   const [status, setStatus] = useState<SocketStatus>('disconnected');
   const [lastMessage, setLastMessage] = useState<WsMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +132,12 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
       attemptRef.current += 1;
 
       if (__DEV__) console.log(`[WS] reconnecting in ${delay}ms`);
-      timerRef.current = setTimeout(() => connectRef.current(id, jwt), delay);
+      timerRef.current = setTimeout(() => {
+        void connectWithFreshToken(id, connectRef.current, () => {
+          setStatus('error');
+          setError('Session expired. Please sign in again.');
+        });
+      }, delay);
     };
 
     ws.onerror = () => {
@@ -118,11 +147,14 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
   };
 
   useEffect(() => {
-    if (!sessionId || !token) return;
+    if (!sessionId) return;
 
     stoppedRef.current = false;
     attemptRef.current = 0;
-    connectRef.current(sessionId, token);
+    void connectWithFreshToken(sessionId, connectRef.current, () => {
+      setStatus('error');
+      setError('Not signed in.');
+    });
 
     return () => {
       stoppedRef.current = true;
@@ -135,7 +167,7 @@ export function useSessionSocket(sessionId: string | null): UseSessionSocketRetu
       wsRef.current = null;
       ws?.close();
     };
-  }, [sessionId, token]);
+  }, [sessionId]);
 
   const send = useCallback((type: string, payload: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {

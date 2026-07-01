@@ -64,7 +64,7 @@ export default function JoinSessionScreen() {
     setError(null);
     setLoading(true);
     try {
-      const result = await joinSession(token, trimmed, role);
+      const result = await joinSession(trimmed, role);
       router.replace({
         pathname: '/waiting-room' as any,
         params: {

@@ -163,7 +163,7 @@ export default function SessionSetupScreen() {
   useEffect(() => {
     if (!token || !code || code === '——') return;
     let cancelled = false;
-    getSessionState(token, code)
+    getSessionState(code)
       .then((state) => {
         if (!cancelled) mergeCheckpoints(state.checkpoints);
       })
@@ -190,7 +190,7 @@ export default function SessionSetupScreen() {
           return next;
         });
         if (token && code && code !== '——') {
-          getSessionState(token, code)
+          getSessionState(code)
             .then((state) => mergeCheckpoints(state.checkpoints))
             .catch(() => {});
         }
@@ -286,7 +286,7 @@ export default function SessionSetupScreen() {
         return next;
       });
       try {
-        await setCheckpointRole(token, code, targetUserId, role);
+        await setCheckpointRole(code, targetUserId, role);
       } catch {
         // Server will broadcast ROLE_ASSIGNED if successful; UI self-corrects
       }
@@ -300,7 +300,7 @@ export default function SessionSetupScreen() {
     setOpening(true);
     setOpenError(null);
     try {
-      await openSession(token, session_id);
+      await openSession(session_id);
       setIsOpen(true);
     } catch (e) {
       setOpenError(e instanceof SessionError ? e.message : 'Failed to open session. Try again.');
@@ -348,7 +348,7 @@ export default function SessionSetupScreen() {
     setAddingComp(true);
     setAddCompError(null);
     try {
-      const comp = await apiAddCompetitor(token, code, name_, newCompBib.trim() || undefined);
+      const comp = await apiAddCompetitor(code, name_, newCompBib.trim() || undefined);
       setCompetitors((prev) => [...prev, comp]);
       setNewCompName('');
       setNewCompBib('');
