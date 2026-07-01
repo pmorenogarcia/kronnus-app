@@ -46,7 +46,6 @@ jobs:
           eas build
           --profile production
           --platform ${{ github.event.inputs.platform }}
-          --environment production
           --non-interactive
 
       - name: Publish OTA update (production channel)
