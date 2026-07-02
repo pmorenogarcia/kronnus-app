@@ -5,3 +5,4 @@ export { saveQueue, loadQueue, clearQueue } from './queuePersistence';
 export type { QueuedCapture } from './queuePersistence';
 export { saveSession, loadSession, clearSession } from './sessionPersistence';
 export type { PersistedSessionState } from './sessionPersistence';
+export { buildAssignedMap } from './assignedMap';

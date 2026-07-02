@@ -86,3 +86,7 @@ export function assignCompetitor(
 export function listTimestamps(sessionCode: string): Promise<Timestamp[]> {
   return apiRequest<Timestamp[]>('GET', `/api/v1/sessions/${sessionCode}/timestamps`);
 }
+
+export function listMyTimestamps(sessionCode: string): Promise<Timestamp[]> {
+  return apiRequest<Timestamp[]>('GET', `/api/v1/sessions/${sessionCode}/timestamps/mine`);
+}
