@@ -26,7 +26,13 @@ export type {
   SessionStateResponse,
   Competitor,
 } from './client';
-export { captureTimestamp, assignCompetitor, listTimestamps, TimestampError } from './timestamps';
+export {
+  captureTimestamp,
+  assignCompetitor,
+  listTimestamps,
+  listMyTimestamps,
+  TimestampError,
+} from './timestamps';
 export type { Timestamp } from './timestamps';
 export { getResults } from './results';
 export type { SegmentTime, CompetitorResult, ResultsResponse } from './results';

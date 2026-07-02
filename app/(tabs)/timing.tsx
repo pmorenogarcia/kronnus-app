@@ -20,7 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts';
 import { assignCompetitor, captureTimestamp, TimestampError } from '@/src/api/timestamps';
 import type { Timestamp } from '@/src/api/timestamps';
-import { getSessionState, listCompetitors, listSessions } from '@/src/api';
+import { getSessionState, listCompetitors, listMyTimestamps, listSessions } from '@/src/api';
 import type { Competitor, Session } from '@/src/api';
 import { CameraPermissionGate } from '@/src/components';
 import { useSessionSocket, useSettings } from '@/src/hooks';
@@ -32,6 +32,7 @@ import {
   saveQueue,
   loadQueue,
   clearQueue,
+  buildAssignedMap,
 } from '@/src/utils';
 import type { QueuedCapture } from '@/src/utils';
 import { AppColors as C } from '@/constants/theme';
@@ -549,11 +550,35 @@ function TimingContent() {
   }, [session_id, queue]);
 
   const [flushing, setFlushing] = useState(false);
-  // TODO(offline-v2): assignedMap is not persisted — after an app restart and recovery,
-  // all competitors appear unassigned even if some already have DB timestamps. This is
-  // display-only (data is on the server). A competitor re-assigned triggers a 422 from
-  // the API. Fix requires GET /api/v1/sessions/:code/checkpoints/:id/assignments.
   const [assignedMap, setAssignedMap] = useState<Map<string, number>>(new Map());
+
+  // Recover assignments after a reconnect (app restart, dropped WS): assignedMap is
+  // otherwise pure in-memory state, but the underlying timestamps are always persisted
+  // server-side. Only fills gaps — never overwrites an assignment already made this
+  // session, so it can't race with handleAssign's optimistic update. Re-runs when
+  // sessionStartMs is corrected by an authoritative SESSION_STATE message.
+  useEffect(() => {
+    if (!token || !code) return;
+    let cancelled = false;
+    listMyTimestamps(code)
+      .then((timestamps) => {
+        if (cancelled) return;
+        const recovered = buildAssignedMap(timestamps, sessionStartMs);
+        setAssignedMap((prev) => {
+          const merged = new Map(prev);
+          recovered.forEach((elapsed, competitorId) => {
+            if (!merged.has(competitorId)) merged.set(competitorId, elapsed);
+          });
+          return merged;
+        });
+      })
+      .catch(() => {
+        /* non-fatal — competitor bar just stays without recovered elapsed times */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, code, sessionStartMs]);
 
   // ─── Offline queue flush ──────────────────────────────────────────────────
 
