@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts';
 import {
   addCompetitor as apiAddCompetitor,
   getSessionState,
+  listCompetitors,
   openSession,
   setCheckpointRole,
   SessionError,
@@ -172,6 +173,23 @@ export default function SessionSetupScreen() {
       cancelled = true;
     };
   }, [token, code, mergeCheckpoints]);
+
+  // Competitors are always persisted server-side (addCompetitor/apiAddCompetitor
+  // hits the backend immediately), but local state starts empty on every mount —
+  // fetch what already exists so remounting this screen (e.g. navigating back
+  // from Home) doesn't look like the list was lost.
+  useEffect(() => {
+    if (!token || !code || code === '——') return;
+    let cancelled = false;
+    listCompetitors(code)
+      .then((list) => {
+        if (!cancelled) setCompetitors(list);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token, code]);
 
   // ─── WebSocket event handling ─────────────────────────────────────────────────
 
